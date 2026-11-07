@@ -5,6 +5,7 @@
 #include "webm.h"
 
 #include <stdio.h>
+#include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -585,7 +586,6 @@ static void yuv_to_rgba(WebmPlayer *player, const vpx_image_t *image) {
     int height = (int)image->d_h;
     int x;
     int y;
-    unsigned char *dst;
     const unsigned char *yp = image->planes[VPX_PLANE_Y];
     const unsigned char *up = image->planes[VPX_PLANE_U];
     const unsigned char *vp = image->planes[VPX_PLANE_V];
@@ -606,48 +606,79 @@ static void yuv_to_rgba(WebmPlayer *player, const vpx_image_t *image) {
         player->frame_height = height;
     }
 
-    dst = player->rgba;
-    for (y = 0; y < height; y++) {
-        const unsigned char *row_y = yp + (size_t)y * (size_t)ys;
-        const unsigned char *row_u = up + (size_t)(y / 2) * (size_t)us;
-        const unsigned char *row_v = vp + (size_t)(y / 2) * (size_t)vs;
-        for (x = 0; x < width; x++) {
-            int yy = (int)row_y[x] - 16;
-            int uu = (int)row_u[x / 2] - 128;
-            int vv = (int)row_v[x / 2] - 128;
-            int r = (298 * yy + 409 * vv + 128) >> 8;
-            int g = (298 * yy - 100 * uu - 208 * vv + 128) >> 8;
-            int b = (298 * yy + 516 * uu + 128) >> 8;
-            if (r < 0) r = 0;
-            if (r > 255) r = 255;
-            if (g < 0) g = 0;
-            if (g > 255) g = 255;
-            if (b < 0) b = 0;
-            if (b > 255) b = 255;
-            dst[0] = (unsigned char)r;
-            dst[1] = (unsigned char)g;
-            dst[2] = (unsigned char)b;
-            dst[3] = 255;
-            dst += 4;
+    {
+        static int tables_ready = 0;
+        static int ytab[256], rv[256], gu[256], gv[256], bu[256];
+        int i;
+        if (!tables_ready) {
+            for (i = 0; i < 256; i++) {
+                int c = i - 128;
+                ytab[i] = 298 * (i - 16);
+                rv[i] = 409 * c;
+                gu[i] = -100 * c;
+                gv[i] = -208 * c;
+                bu[i] = 516 * c;
+            }
+            tables_ready = 1;
+        }
+        for (y = 0; y < height; y++) {
+            const unsigned char *row_y = yp + (size_t)y * (size_t)ys;
+            const unsigned char *row_u = up + (size_t)(y / 2) * (size_t)us;
+            const unsigned char *row_v = vp + (size_t)(y / 2) * (size_t)vs;
+            uint32_t *out = (uint32_t *)(player->rgba + (size_t)y * (size_t)width * 4u);
+            for (x = 0; x + 1 < width; x += 2) {
+                int u = row_u[x >> 1];
+                int v = row_v[x >> 1];
+                int y0 = ytab[row_y[x]];
+                int y1 = ytab[row_y[x + 1]];
+                int r = (y0 + rv[v] + 128) >> 8;
+                int g = (y0 + gu[u] + gv[v] + 128) >> 8;
+                int b = (y0 + bu[u] + 128) >> 8;
+                if ((unsigned)r > 255u) r = r < 0 ? 0 : 255;
+                if ((unsigned)g > 255u) g = g < 0 ? 0 : 255;
+                if ((unsigned)b > 255u) b = b < 0 ? 0 : 255;
+                out[x] = (255u << 24) | ((uint32_t)b << 16) | ((uint32_t)g << 8) | (uint32_t)r;
+                r = (y1 + rv[v] + 128) >> 8;
+                g = (y1 + gu[u] + gv[v] + 128) >> 8;
+                b = (y1 + bu[u] + 128) >> 8;
+                if ((unsigned)r > 255u) r = r < 0 ? 0 : 255;
+                if ((unsigned)g > 255u) g = g < 0 ? 0 : 255;
+                if ((unsigned)b > 255u) b = b < 0 ? 0 : 255;
+                out[x + 1] = (255u << 24) | ((uint32_t)b << 16) | ((uint32_t)g << 8) | (uint32_t)r;
+            }
+            if (x < width) {
+                int u = row_u[x >> 1];
+                int v = row_v[x >> 1];
+                int y0 = ytab[row_y[x]];
+                int r = (y0 + rv[v] + 128) >> 8;
+                int g = (y0 + gu[u] + gv[v] + 128) >> 8;
+                int b = (y0 + bu[u] + 128) >> 8;
+                if ((unsigned)r > 255u) r = r < 0 ? 0 : 255;
+                if ((unsigned)g > 255u) g = g < 0 ? 0 : 255;
+                if ((unsigned)b > 255u) b = b < 0 ? 0 : 255;
+                out[x] = (255u << 24) | ((uint32_t)b << 16) | ((uint32_t)g << 8) | (uint32_t)r;
+            }
         }
     }
     player->rgba_valid = 1;
     player->frame_serial++;
 }
 
-static void decode_video_block(WebmPlayer *player, const WebmBlock *block) {
+static const vpx_image_t *decode_video_block(WebmPlayer *player, const WebmBlock *block) {
     vpx_image_t *image;
     vpx_codec_iter_t iter = NULL;
+    const vpx_image_t *last = NULL;
 
     if (!player->vpx_ready || !block || !block->data || block->size == 0) {
-        return;
+        return NULL;
     }
     if (vpx_codec_decode(&player->vpx, block->data, (unsigned int)block->size, NULL, 0) != VPX_CODEC_OK) {
-        return;
+        return NULL;
     }
     while ((image = vpx_codec_get_frame(&player->vpx, &iter)) != NULL) {
-        yuv_to_rgba(player, image);
+        last = image;
     }
+    return last;
 }
 
 static void rewind_video(WebmPlayer *player) {
@@ -727,7 +758,27 @@ int webm_width(const WebmPlayer *player) { return player ? player->width : 0; }
 int webm_height(const WebmPlayer *player) { return player ? player->height : 0; }
 double webm_duration(const WebmPlayer *player) { return player ? player->duration : 0.0; }
 
+int webm_current(WebmPlayer *player, const unsigned char **rgba, int *width, int *height, int *serial) {
+    if (!player || !player->rgba_valid || !player->rgba) {
+        return 0;
+    }
+    if (rgba) {
+        *rgba = player->rgba;
+    }
+    if (width) {
+        *width = player->frame_width;
+    }
+    if (height) {
+        *height = player->frame_height;
+    }
+    if (serial) {
+        *serial = player->frame_serial;
+    }
+    return 1;
+}
+
 int webm_frame(WebmPlayer *player, double t, const unsigned char **rgba, int *width, int *height, int *serial) {
+    const vpx_image_t *last = NULL;
     if (!player || !player->vpx_ready) {
         return 0;
     }
@@ -740,13 +791,20 @@ int webm_frame(WebmPlayer *player, double t, const unsigned char **rgba, int *wi
     player->last_time = t;
 
     if (!player->rgba_valid && player->video_index < player->video.count) {
-        decode_video_block(player, &player->video.items[player->video_index]);
+        last = decode_video_block(player, &player->video.items[player->video_index]);
         player->video_index++;
     }
     while (player->video_index < player->video.count &&
            player->video.items[player->video_index].pts <= t + 0.0005) {
-        decode_video_block(player, &player->video.items[player->video_index]);
+        const vpx_image_t *image = decode_video_block(player, &player->video.items[player->video_index]);
+        if (image) {
+            last = image;
+        }
         player->video_index++;
+    }
+    /* Convert once: intermediate frames decoded to catch up are never shown. */
+    if (last) {
+        yuv_to_rgba(player, last);
     }
     if (!player->rgba_valid) {
         return 0;

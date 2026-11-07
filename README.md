@@ -55,6 +55,12 @@ frames go to libvpx; the Vorbis track is decoded once to a temporary WAV in
 `/download0/saves` for the mixer, then removed. The engine prefers the `.webm`
 files and only falls back to C09V frame packs if someone still has them.
 
+On the console the decoder runs on its own pthread: it decodes to the wall
+clock, converts one YUV frame per tick, and publishes it into a double buffer.
+The render thread only copies the newest published frame, so the menu and
+dialogue hold 60 fps while a 1080p video plays. The YUV→RGBA pass uses
+fixed-point tables and writes two pixels per U/V pair.
+
 ## Build
 
 The pipeline mirrors the first-game port. Work from the repository root.

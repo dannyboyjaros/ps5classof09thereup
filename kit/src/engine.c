@@ -23,6 +23,7 @@
 #endif
 
 #ifdef __PROSPERO__
+#include <unistd.h>
 /* The app folder is mounted read-only at /app0. Writable storage lives in
  * /download0, which the console creates because param.json has a positive
  * downloadDataSize. */
@@ -1406,7 +1407,70 @@ static void video_name_from_file(const char *file, char *out, size_t n) {
     }
 }
 
+#if defined(__PROSPERO__)
+/* VP8 decoding runs on its own core so the menu and dialogue never wait for
+ * it. The thread decodes to the wall clock; draw_video only reads the last
+ * converted frame. */
+static void *video_decode_thread(void *arg) {
+    Engine *e = (Engine *)arg;
+    WebmPlayer *player = (WebmPlayer *)e->webm_player;
+    while (!e->video_thread_stop && e->video_active && e->webm_player == player) {
+        Uint32 now = SDL_GetTicks();
+        double t = (double)(now - e->video_start) / 1000.0;
+        double duration = webm_duration(player);
+        const unsigned char *rgba = NULL;
+        int width = 0;
+        int height = 0;
+        int serial = 0;
+        if (e->video_loop && duration > 0.01) {
+            while (t >= duration) {
+                t -= duration;
+            }
+        }
+        /* Decode unlocked: only the publish step takes the mutex. */
+        if (webm_frame(player, t, &rgba, &width, &height, &serial) && rgba &&
+            width > 0 && height > 0) {
+            size_t need = (size_t)width * (size_t)height * 4u;
+            pthread_mutex_lock(&e->video_mutex);
+            if (e->video_buf_size < need) {
+                unsigned char *a = (unsigned char *)realloc(e->video_buf[0], need);
+                unsigned char *b = (unsigned char *)realloc(e->video_buf[1], need);
+                if (a) {
+                    e->video_buf[0] = a;
+                }
+                if (b) {
+                    e->video_buf[1] = b;
+                }
+                if (a && b) {
+                    e->video_buf_size = need;
+                }
+            }
+            if (e->video_buf_size >= need) {
+                int back = 1 - e->video_buf_index;
+                memcpy(e->video_buf[back], rgba, need);
+                e->video_buf_index = back;
+                e->video_buf_serial = serial;
+                e->video_buf_w = width;
+                e->video_buf_h = height;
+            }
+            pthread_mutex_unlock(&e->video_mutex);
+        }
+        usleep(4000);
+    }
+    return NULL;
+}
+#endif
+
 static void video_release(Engine *e) {
+#ifdef __PROSPERO__
+    if (e->video_thread_live) {
+        e->video_thread_stop = 1;
+        pthread_join(e->video_thread, NULL);
+        e->video_thread_live = 0;
+    }
+    e->video_thread_stop = 0;
+    e->video_buf_serial = -1;
+#endif
     if (e->video_tex) {
         SDL_DestroyTexture(e->video_tex);
         e->video_tex = NULL;
@@ -1488,6 +1552,18 @@ static int video_start(Engine *e, const char *name, int loop, int mode) {
                     remove(wav_path);
                 }
             }
+#ifdef __PROSPERO__
+            if (!e->video_mutex_ready) {
+                pthread_mutex_init(&e->video_mutex, NULL);
+                e->video_mutex_ready = 1;
+            }
+            e->video_thread_stop = 0;
+            e->video_buf_serial = -1;
+            e->video_buf_index = 0;
+            if (pthread_create(&e->video_thread, NULL, video_decode_thread, e) == 0) {
+                e->video_thread_live = 1;
+            }
+#endif
             if (mode == 0) {
                 e->waiting = 1;
                 e->wait_auto = 0;
@@ -1621,30 +1697,59 @@ static void draw_video(Engine *e) {
         int width = 0;
         int height = 0;
         int serial = 0;
+        int have = 0;
+        SDL_Surface *frame = NULL;
         if (e->video_loop && duration > 0.01) {
             while (seconds >= duration) {
                 seconds -= duration;
             }
         }
-        if (webm_frame((WebmPlayer *)e->webm_player, seconds, &rgba, &width, &height, &serial) && rgba) {
-            if (serial != e->webm_tex_serial) {
-                SDL_Surface *frame = SDL_CreateRGBSurfaceWithFormat(0, width, height, 32,
-                                                                    SDL_PIXELFORMAT_ARGB8888);
+#if defined(__PROSPERO__)
+        if (e->video_thread_live && e->video_mutex_ready) {
+            pthread_mutex_lock(&e->video_mutex);
+            if (e->video_buf_serial != e->webm_tex_serial && e->video_buf_size > 0) {
+                width = e->video_buf_w;
+                height = e->video_buf_h;
+                serial = e->video_buf_serial;
+                frame = SDL_CreateRGBSurfaceWithFormat(0, width, height, 32,
+                                                       SDL_PIXELFORMAT_ARGB8888);
                 if (frame && frame->pixels) {
-                    memcpy(frame->pixels, rgba, (size_t)width * (size_t)height * 4u);
-                    if (e->video_tex) {
-                        SDL_DestroyTexture(e->video_tex);
-                    }
-                    e->video_tex = SDL_CreateTextureFromSurface(e->renderer, frame);
-                    if (e->video_tex) {
-                        SDL_SetTextureBlendMode(e->video_tex, SDL_BLENDMODE_BLEND);
-                    }
-                    e->webm_tex_serial = serial;
-                }
-                if (frame) {
-                    SDL_FreeSurface(frame);
+                    memcpy(frame->pixels, e->video_buf[e->video_buf_index],
+                           (size_t)width * (size_t)height * 4u);
                 }
             }
+            pthread_mutex_unlock(&e->video_mutex);
+        } else {
+            have = webm_frame((WebmPlayer *)e->webm_player, seconds, &rgba, &width, &height, &serial);
+            if (have && rgba && serial != e->webm_tex_serial) {
+                frame = SDL_CreateRGBSurfaceWithFormat(0, width, height, 32,
+                                                       SDL_PIXELFORMAT_ARGB8888);
+                if (frame && frame->pixels) {
+                    memcpy(frame->pixels, rgba, (size_t)width * (size_t)height * 4u);
+                }
+            }
+        }
+#else
+        have = webm_frame((WebmPlayer *)e->webm_player, seconds, &rgba, &width, &height, &serial);
+        if (have && rgba && serial != e->webm_tex_serial) {
+            frame = SDL_CreateRGBSurfaceWithFormat(0, width, height, 32, SDL_PIXELFORMAT_ARGB8888);
+            if (frame && frame->pixels) {
+                memcpy(frame->pixels, rgba, (size_t)width * (size_t)height * 4u);
+            }
+        }
+#endif
+        if (frame && frame->pixels) {
+            if (e->video_tex) {
+                SDL_DestroyTexture(e->video_tex);
+            }
+            e->video_tex = SDL_CreateTextureFromSurface(e->renderer, frame);
+            if (e->video_tex) {
+                SDL_SetTextureBlendMode(e->video_tex, SDL_BLENDMODE_BLEND);
+            }
+            e->webm_tex_serial = serial;
+        }
+        if (frame) {
+            SDL_FreeSurface(frame);
         }
         if (!e->video_tex) {
             return;

@@ -26,6 +26,10 @@ double webm_duration(const WebmPlayer *player);
  * that changes whenever a new frame is decoded. */
 int webm_frame(WebmPlayer *player, double t, const unsigned char **rgba, int *width, int *height, int *serial);
 
+/* The last converted frame, without decoding.  For a decoder thread: the
+ * caller reads it while holding its own lock. */
+int webm_current(WebmPlayer *player, const unsigned char **rgba, int *width, int *height, int *serial);
+
 /* Decode the whole Vorbis track into a 16-bit PCM WAV file.  Returns 1 when
  * audio was written, 0 when the file has no audio or decoding failed. */
 int webm_audio_to_wav(WebmPlayer *player, const char *path);

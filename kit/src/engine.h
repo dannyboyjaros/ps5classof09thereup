@@ -3,6 +3,10 @@
 
 #include "json_lite.h"
 
+#ifdef __PROSPERO__
+#include <pthread.h>
+#endif
+
 #include <SDL.h>
 #include <SDL_image.h>
 #include <SDL_mixer.h>
@@ -275,6 +279,19 @@ typedef struct {
     int video_tex_index;
     Uint32 video_start;
     Mix_Music *video_music;
+#ifdef __PROSPERO__
+    pthread_t video_thread;
+    pthread_mutex_t video_mutex;
+    int video_mutex_ready;
+    int video_thread_live;
+    int video_thread_stop;
+    unsigned char *video_buf[2];
+    size_t video_buf_size;
+    int video_buf_index;
+    int video_buf_serial;
+    int video_buf_w;
+    int video_buf_h;
+#endif
     int boot_active;
     int boot_index;
 
