@@ -13,10 +13,8 @@
 #define STBI_NO_HDR
 #define STBI_NO_PIC
 #define STBI_NO_PNM
-/* The PS5 loader's libc does not provide emulated-TLS helpers, so keep stb's
- * decoder state in ordinary statics. Decoding is single-threaded here. */
+/* The console libc has no emulated-TLS helpers or assert backend. */
 #define STBI_NO_THREAD_LOCALS
-/* No assert() backend is linked into the console runtime. */
 #define STBI_ASSERT(x) ((void)0)
 #include "stb_image.h"
 
@@ -53,6 +51,34 @@ SDL_Surface *IMG_Load(const char *file) {
     }
     /* stb gives R,G,B,A bytes; the runtime's 0xAABBGGRR word has the same
      * byte order on little-endian. */
+    memcpy(surface->pixels, rgba, (size_t)w * (size_t)h * 4u);
+    stbi_image_free(rgba);
+    return surface;
+}
+
+SDL_Surface *IMG_LoadMemory(const void *data, int size) {
+    SDL_Surface *surface;
+    unsigned char *rgba;
+    int w = 0, h = 0, channels = 0;
+
+    if (!data || size <= 0) return NULL;
+
+    rgba = stbi_load_from_memory((const stbi_uc *)data, size, &w, &h, &channels, 4);
+    if (!rgba) {
+        const char *why = stbi_failure_reason();
+        snprintf(g_image_error, sizeof(g_image_error), "%s", why ? why : "unknown image error");
+        return NULL;
+    }
+    if (w <= 0 || h <= 0) {
+        stbi_image_free(rgba);
+        return NULL;
+    }
+
+    surface = SDL_CreateRGBSurfaceWithFormat(0, w, h, 32, SDL_PIXELFORMAT_ARGB8888);
+    if (!surface) {
+        stbi_image_free(rgba);
+        return NULL;
+    }
     memcpy(surface->pixels, rgba, (size_t)w * (size_t)h * 4u);
     stbi_image_free(rgba);
     return surface;

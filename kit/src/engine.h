@@ -38,10 +38,8 @@ enum {
     FONT_TITLE,
     FONT_BODY,
     FONT_SLOT,
-    FONT_CHOICE_SMALL,
-    FONT_MONO,
-    FONT_PHONE,
-    FONT_BODY_TINY,
+    FONT_CSBOX,
+    FONT_TRACKER,
     FONT_COUNT
 };
 
@@ -54,7 +52,7 @@ enum {
     MODE_LOAD,
     MODE_OPTIONS,
     MODE_ABOUT,
-    MODE_ENDINGS
+    MODE_TRACKER
 };
 
 /* Why the interpreter is waiting for input or a timer. */
@@ -64,7 +62,8 @@ enum {
     WAIT_PAUSE,
     WAIT_MENU,
     WAIT_MOVIE,
-    WAIT_ENDING
+    WAIT_ENDING,
+    WAIT_LAPTOP
 };
 
 typedef struct {
@@ -118,18 +117,6 @@ typedef struct {
     int anim_paused;
 } LayerItem;
 
-/* One remembered line, so Circle can step back through dialogue. */
-#define HISTORY_MAX 32
-
-typedef struct {
-    int pc;
-    int hud;
-    int next_order;
-    int item_count;
-    int ending_active;
-    LayerItem items[MAX_ITEMS];
-} HistoryEntry;
-
 typedef struct {
     JsonValue *root;
     JsonValue *ops;
@@ -168,6 +155,10 @@ typedef struct {
     int item_count;
     int next_order;
     int hud;
+    int csbox;                 /* Re-Up cutscene dialogue: yellow, no text box */
+    int laptop_active;         /* call screen search_engine_screen */
+    char laptop_target[64];
+    char start_variant[64];    /* persistent.start_label_jump (A/B opening) */
     int ending_active;
     char ending_title[256];
     char ending_body[MAX_TEXT];
@@ -235,14 +226,13 @@ typedef struct {
     int options_return_mode;
     int opt_music;
     int opt_voice;
+    int tracker_index;
+    int tracker_text;
     Uint32 pause_started;
 
     /* startup video frame cache (optional, extracted from the user's copy) */
     int splash_active;
-    int splash_mode; /* 0 = logo, 1 = intro, 2 = ending video */
-    Mix_Music *intro_music;
     int splash_frames;
-    Uint32 splash_skip_at;
     int splash_fps;
     int splash_w;
     int splash_h;
@@ -251,28 +241,30 @@ typedef struct {
     SDL_Texture *splash_tex;
     int splash_tex_index;
 
+    /* video (C09V frame packs + mp3 audio) */
+    int video_active;
+    int video_mode; /* 0 = movie op, 1 = movie displayable, 2 = boot */
+    int video_loop;
+    char video_name[64];
+    unsigned char *video_pack;
+    size_t video_pack_size;
+    unsigned int *video_offsets;
+    int video_w;
+    int video_h;
+    int video_fps;
+    int video_frames;
+    SDL_Texture *video_tex;
+    int video_tex_index;
+    Uint32 video_start;
+    Mix_Music *video_music;
+    int boot_active;
+    int boot_index;
+
     /* transient status line */
     Uint32 toast_until;
     char toast[MAX_TOAST];
     int shot_requested;
     Uint32 capture_at;
-
-    /* rollback history */
-    HistoryEntry history[HISTORY_MAX];
-    int history_pos;
-
-    /* ending tracker screen */
-    int endings_index;
-    int endings_detail;
-    int endings_scroll;
-    int endings_top;
-
-    /* "new message" animation shown for a freshly unlocked ending */
-    int new_ending;
-    int newmsg_active;
-    int newmsg_frame;
-    Uint32 newmsg_next;
-    Uint32 newmsg_skip_at;
 
     /* persistent ending tracker */
     int seen_count;

@@ -13,6 +13,9 @@
 #define STBI_NO_HDR
 #define STBI_NO_PIC
 #define STBI_NO_PNM
+/* The console libc has no emulated-TLS helpers or assert backend. */
+#define STBI_NO_THREAD_LOCALS
+#define STBI_ASSERT(x) ((void)0)
 #include "stb_image.h"
 
 static char g_image_error[128] = "";

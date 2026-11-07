@@ -1492,7 +1492,9 @@ static void video_finish(Engine *e) {
         }
         return;
     }
-    if (mode == 0) {
+    if (mode == 0 || mode == 1) {
+        /* A cutscene was skipped or finished: do not leave the following
+         * timed pause running on a black screen. */
         e->waiting = 0;
         e->wait_kind = WAIT_NONE;
     }
@@ -2547,7 +2549,7 @@ static int key_action(SDL_Keycode key) {
         return ACT_RIGHT;
     case SDLK_TAB:
         return ACT_PAUSE;
-    case SDLK_t:
+    case SDLK_e:
         return ACT_TRACKER;
     default:
         return ACT_NONE;

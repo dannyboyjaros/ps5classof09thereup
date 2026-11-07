@@ -1,5 +1,4 @@
 #include "engine.h"
-#include "ps5_trace.h"
 
 #include <ctype.h>
 #include <stdio.h>
@@ -83,7 +82,6 @@ static void join_path(char *out, size_t n, const char *base, const char *rel) {
     }
 }
 
-#ifndef __PROSPERO__
 static void dir_name(const char *path, char *out, size_t n) {
     char *slash;
     char *back;
@@ -105,7 +103,6 @@ static void dir_name(const char *path, char *out, size_t n) {
         copy_str(out, n, ".");
     }
 }
-#endif
 
 static char *read_file(const char *path, size_t *out_len) {
     FILE *file = fopen(path, "rb");
@@ -1056,7 +1053,7 @@ static int save_game(Engine *e, int slot) {
         return 0;
     }
     snprintf(when, sizeof(when), "%ld", (long)time(NULL));
-    fputs("CLASS09SAVE\t3\n", file);
+    fputs("CLASS09SAVE\t2\n", file);
     write_field_str(file, "saved_at", when);
     fprintf(file, "pc\t%d\n", e->pc);
     fprintf(file, "wait_kind\t%d\n", e->wait_kind);
@@ -1067,6 +1064,7 @@ static int save_game(Engine *e, int slot) {
     write_field_str(file, "ambient", e->ambient_path);
     write_field_str(file, "music", e->music_path);
     fprintf(file, "hud\t%d\n", e->hud);
+    fprintf(file, "csbox\t%d\n", e->csbox);
     fprintf(file, "choice_count\t%d\n", e->choice_count);
     fprintf(file, "choice_index\t%d\n", e->choice_index);
     for (i = 0; i < e->choice_count; i++) {
@@ -1116,8 +1114,6 @@ static int split_fields(char *line, char **fields, int max_fields) {
 
 static void clear_items(Engine *e);
 
-static void history_reset(Engine *e);
-
 static int load_game(Engine *e, int slot) {
     char path[SAVE_PATH_MAX];
     char raw[MAX_TEXT + 1024];
@@ -1130,11 +1126,6 @@ static int load_game(Engine *e, int slot) {
     slot_path(e, slot, path, sizeof(path));
     file = fopen(path, "rb");
     if (!file) {
-        return 0;
-    }
-    if (!fgets(raw, sizeof(raw), file) || strncmp(raw, "CLASS09SAVE\t3", 13) != 0) {
-        fclose(file);
-        printf("class09: ignoring save slot %d written by an older script\n", slot);
         return 0;
     }
     stop_voice(e);
@@ -1180,6 +1171,8 @@ static int load_game(Engine *e, int slot) {
             unescape_into(music, sizeof(music), fields[1]);
         } else if (strcmp(fields[0], "hud") == 0) {
             e->hud = atoi(fields[1]);
+        } else if (strcmp(fields[0], "csbox") == 0) {
+            e->csbox = atoi(fields[1]);
         } else if (strcmp(fields[0], "waiting") == 0) {
             waiting = atoi(fields[1]);
         } else if (strcmp(fields[0], "choice_index") == 0) {
@@ -1270,7 +1263,6 @@ static int load_game(Engine *e, int slot) {
         play_chunk(e, "music", temp, 0, 1);
     }
     apply_volumes(e);
-    history_reset(e);
     return 1;
 }
 
@@ -1326,34 +1318,6 @@ static int ending_is_seen(Engine *e, const char *id) {
     return 0;
 }
 
-static void save_new_ending(Engine *e) {
-    char path[SAVE_PATH_MAX];
-    FILE *file;
-    ensure_save_dir(e);
-    snprintf(path, sizeof(path), "%s/new_ending", e->save_dir);
-    file = fopen(path, "wb");
-    if (!file) {
-        return;
-    }
-    fputs(e->new_ending ? "1\n" : "0\n", file);
-    fclose(file);
-}
-
-static void load_new_ending(Engine *e) {
-    char path[SAVE_PATH_MAX];
-    char raw[16];
-    FILE *file;
-    snprintf(path, sizeof(path), "%s/new_ending", e->save_dir);
-    file = fopen(path, "rb");
-    if (!file) {
-        return;
-    }
-    if (fgets(raw, sizeof(raw), file)) {
-        e->new_ending = raw[0] == '1';
-    }
-    fclose(file);
-}
-
 static void mark_seen(Engine *e, const char *id) {
     if (!id || strlen(id) != 4 || ending_is_seen(e, id)) {
         return;
@@ -1362,10 +1326,274 @@ static void mark_seen(Engine *e, const char *id) {
         copy_str(e->seen[e->seen_count], sizeof(e->seen[0]), id);
         e->seen_count++;
         save_seen(e);
-        e->new_ending = 1;
-        save_new_ending(e);
-        c09_trace("seen: %s count=%d", id, e->seen_count);
     }
+}
+
+/* The Re-Up alternates its two openings on each new game through
+ * persistent.start_label_jump.  Keep the same value between runs. */
+static void start_variant_path(Engine *e, char *out, size_t n) {
+    snprintf(out, n, "%s/start_variant.txt", e->save_dir);
+}
+
+static void load_start_variant(Engine *e) {
+    char path[SAVE_PATH_MAX];
+    char raw[64];
+    FILE *file;
+    copy_str(e->start_variant, sizeof(e->start_variant), "scene_0002B");
+    start_variant_path(e, path, sizeof(path));
+    file = fopen(path, "rb");
+    if (!file) {
+        return;
+    }
+    if (fgets(raw, sizeof(raw), file)) {
+        size_t len = strlen(raw);
+        while (len > 0 && (raw[len - 1] == '\n' || raw[len - 1] == '\r')) {
+            raw[--len] = 0;
+        }
+        if (len > 1 && len < sizeof(e->start_variant)) {
+            copy_str(e->start_variant, sizeof(e->start_variant), raw);
+        }
+    }
+    fclose(file);
+}
+
+static void save_start_variant(Engine *e) {
+    char path[SAVE_PATH_MAX];
+    FILE *file;
+    start_variant_path(e, path, sizeof(path));
+    file = fopen(path, "wb");
+    if (!file) {
+        return;
+    }
+    fprintf(file, "%s\n", e->start_variant);
+    fclose(file);
+}
+
+/* ------------------------------------------------------------------------- */
+/* video: C09V frame packs (JPEG frames + mp3 audio)                         */
+/* ------------------------------------------------------------------------- */
+
+static void enter_main_menu(Engine *e);
+
+static const char *const BOOT_VIDEOS[] = {"WCsplash", "logosplash"};
+#define BOOT_COUNT ((int)(sizeof(BOOT_VIDEOS) / sizeof(BOOT_VIDEOS[0])))
+
+static void video_paths(Engine *e, const char *name, char *pack, size_t np, char *audio, size_t na) {
+    snprintf(pack, np, "%s/videos/packs/%s.pkv", e->data_dir, name);
+    snprintf(audio, na, "%s/videos/%s.mp3", e->data_dir, name);
+}
+
+static void video_name_from_file(const char *file, char *out, size_t n) {
+    const char *base = file ? file : "";
+    const char *slash = strrchr(base, '/');
+    char *dot;
+    if (!slash) {
+        slash = strrchr(base, '\\');
+    }
+    if (slash) {
+        base = slash + 1;
+    }
+    copy_str(out, n, base);
+    dot = strrchr(out, '.');
+    if (dot) {
+        *dot = 0;
+    }
+}
+
+static void video_release(Engine *e) {
+    if (e->video_tex) {
+        SDL_DestroyTexture(e->video_tex);
+        e->video_tex = NULL;
+    }
+    if (e->video_music) {
+        Mix_HaltMusic();
+        Mix_FreeMusic(e->video_music);
+        e->video_music = NULL;
+    }
+    free(e->video_pack);
+    e->video_pack = NULL;
+    e->video_offsets = NULL;
+    e->video_active = 0;
+    e->video_tex_index = -1;
+}
+
+static int video_start(Engine *e, const char *name, int loop, int mode) {
+    char pack_path[SAVE_PATH_MAX];
+    char audio_path[SAVE_PATH_MAX];
+    unsigned char *data;
+    size_t len = 0;
+    unsigned int magic = 0;
+    unsigned int version = 0;
+    unsigned int w = 0;
+    unsigned int h = 0;
+    unsigned int fps = 0;
+    unsigned int frames = 0;
+
+    if (!name || !name[0]) {
+        return 0;
+    }
+    video_release(e);
+    video_paths(e, name, pack_path, sizeof(pack_path), audio_path, sizeof(audio_path));
+    data = (unsigned char *)read_file(pack_path, &len);
+    if (!data || len < 32) {
+        printf("class09: video pack missing: %s\n", pack_path);
+        free(data);
+        return 0;
+    }
+    memcpy(&magic, data, 4);
+    memcpy(&version, data + 4, 4);
+    memcpy(&w, data + 8, 4);
+    memcpy(&h, data + 12, 4);
+    memcpy(&fps, data + 16, 4);
+    memcpy(&frames, data + 20, 4);
+    (void)magic;
+    if (memcmp(data, "C09V", 4) != 0 || version != 1 || frames == 0 || fps == 0 ||
+        len < (size_t)(28 + frames * 4)) {
+        free(data);
+        return 0;
+    }
+    e->video_pack = data;
+    e->video_pack_size = len;
+    e->video_offsets = (unsigned int *)(data + 28);
+    e->video_w = (int)w;
+    e->video_h = (int)h;
+    e->video_fps = (int)fps;
+    e->video_frames = (int)frames;
+    e->video_mode = mode;
+    e->video_loop = loop;
+    e->video_start = SDL_GetTicks();
+    e->video_tex = NULL;
+    e->video_tex_index = -1;
+    e->video_active = 1;
+    copy_str(e->video_name, sizeof(e->video_name), name);
+    e->video_music = Mix_LoadMUS(audio_path);
+    if (e->video_music) {
+        Mix_PlayMusic(e->video_music, 1);
+    }
+    if (mode == 0) {
+        e->waiting = 1;
+        e->wait_auto = 0;
+        e->wait_kind = WAIT_MOVIE;
+    }
+    return 1;
+}
+
+static void video_finish(Engine *e) {
+    int mode = e->video_mode;
+    video_release(e);
+    if (mode == 2) {
+        if (e->boot_active) {
+            e->boot_index++;
+            if (e->boot_index < BOOT_COUNT && video_start(e, BOOT_VIDEOS[e->boot_index], 0, 2)) {
+                return;
+            }
+            e->boot_active = 0;
+            enter_main_menu(e);
+        }
+        return;
+    }
+    if (mode == 0 || mode == 1) {
+        /* A cutscene was skipped or finished: do not leave the following
+         * timed pause running on a black screen. */
+        e->waiting = 0;
+        e->wait_kind = WAIT_NONE;
+    }
+}
+
+static void video_boot(Engine *e) {
+    e->boot_active = 1;
+    e->boot_index = 0;
+    if (!video_start(e, BOOT_VIDEOS[0], 0, 2)) {
+        e->boot_index = 1;
+        if (!video_start(e, BOOT_VIDEOS[1], 0, 2)) {
+            e->boot_active = 0;
+            enter_main_menu(e);
+        }
+    }
+}
+
+static void update_video(Engine *e) {
+    Uint32 elapsed;
+    double duration;
+    if (!e->video_active || e->video_frames <= 0 || e->video_fps <= 0) {
+        return;
+    }
+    if (e->video_loop) {
+        return;
+    }
+    elapsed = SDL_GetTicks() - e->video_start;
+    duration = (double)e->video_frames * 1000.0 / (double)e->video_fps;
+    if ((double)elapsed >= duration) {
+        video_finish(e);
+    }
+}
+
+static SDL_Surface *video_surface(const unsigned char *data, int len) {
+#ifdef __PROSPERO__
+    return IMG_LoadMemory(data, len);
+#else
+    SDL_RWops *rw = SDL_RWFromConstMem(data, len);
+    if (!rw) {
+        return NULL;
+    }
+    return IMG_Load_RW(rw, 1);
+#endif
+}
+
+static void draw_video(Engine *e) {
+    Uint32 elapsed;
+    int index;
+    SDL_Surface *surface;
+    SDL_Rect dst;
+    double scale;
+    if (!e->video_active || !e->video_pack || e->video_frames <= 0) {
+        return;
+    }
+    elapsed = SDL_GetTicks() - e->video_start;
+    index = (int)((double)elapsed * (double)e->video_fps / 1000.0);
+    if (e->video_loop) {
+        index %= e->video_frames;
+    } else if (index >= e->video_frames) {
+        index = e->video_frames - 1;
+    }
+    if (index < 0) {
+        index = 0;
+    }
+    if (index != e->video_tex_index) {
+        unsigned int base = (unsigned int)(28 + e->video_frames * 4);
+        unsigned int off = e->video_offsets[index];
+        unsigned int end = (index + 1 < e->video_frames) ? e->video_offsets[index + 1]
+                                                         : (unsigned int)(e->video_pack_size - base);
+        if (off < end && base + end <= e->video_pack_size) {
+            surface = video_surface(e->video_pack + base + off, (int)(end - off));
+            if (surface) {
+                if (e->video_tex) {
+                    SDL_DestroyTexture(e->video_tex);
+                }
+                e->video_tex = SDL_CreateTextureFromSurface(e->renderer, surface);
+                SDL_FreeSurface(surface);
+                if (e->video_tex) {
+                    SDL_SetTextureBlendMode(e->video_tex, SDL_BLENDMODE_BLEND);
+                }
+            } else {
+                printf("class09: video frame %d decode failed (%s)\n", index, IMG_GetError());
+            }
+        }
+        e->video_tex_index = index;
+    }
+    if (!e->video_tex) {
+        return;
+    }
+    scale = (double)SCREEN_W / (double)(e->video_w > 0 ? e->video_w : SCREEN_W);
+    if ((double)(e->video_h > 0 ? e->video_h : SCREEN_H) * scale > SCREEN_H) {
+        scale = (double)SCREEN_H / (double)(e->video_h > 0 ? e->video_h : SCREEN_H);
+    }
+    dst.w = (int)((e->video_w > 0 ? e->video_w : SCREEN_W) * scale + 0.5);
+    dst.h = (int)((e->video_h > 0 ? e->video_h : SCREEN_H) * scale + 0.5);
+    dst.x = (SCREEN_W - dst.w) / 2;
+    dst.y = (SCREEN_H - dst.h) / 2;
+    SDL_SetTextureAlphaMod(e->video_tex, 255);
+    SDL_RenderCopy(e->renderer, e->video_tex, NULL, &dst);
 }
 
 /* ------------------------------------------------------------------------- */
@@ -1374,6 +1602,9 @@ static void mark_seen(Engine *e, const char *id) {
 
 static void clear_layer(Engine *e, const char *layer) {
     int i;
+    if (e->video_active && e->video_mode == 1 && layer && strcmp(layer, "master") == 0) {
+        video_finish(e);
+    }
     for (i = 0; i < MAX_ITEMS; i++) {
         if (e->items[i].used && strcmp(e->items[i].layer, layer) == 0) {
             e->items[i].used = 0;
@@ -1409,6 +1640,18 @@ static void set_item(Engine *e, const char *rel, const char *tag, const char *la
     int order = 0;
     int i;
     LayerItem *item;
+
+    /* `show <tag>` with no attributes keeps the image already on stage. */
+    if (kind && strcmp(kind, "keep") == 0) {
+        return;
+    }
+    /* A Movie() displayable (the opening cutscene) plays full screen. */
+    if (kind && strcmp(kind, "movie") == 0) {
+        char name[64];
+        video_name_from_file(arg && arg[0] ? arg : rel, name, sizeof(name));
+        video_start(e, name, 0, 1);
+        return;
+    }
 
     if (index >= 0) {
         order = e->items[index].order;
@@ -1515,8 +1758,6 @@ static int eval_cond(Engine *e, const char *cond) {
     return ending_is_seen(e, id);
 }
 
-static int load_movie(Engine *e, const char *subdir, int mode);
-
 static void begin_ending(Engine *e, const char *id) {
     int i;
     int count;
@@ -1535,27 +1776,10 @@ static void begin_ending(Engine *e, const char *id) {
         }
     }
     e->ending_active = 1;
-    e->line_shown = 0;
-    stop_voice(e);
-    stop_channel(e, "ambient", 0);
-    stop_channel(e, "music", 0);
-    if (id && id[0]) {
-        char subdir[64];
-        int loaded;
-        snprintf(subdir, sizeof(subdir), "videos/endings/%s", id);
-        c09_trace("ending: id=%s text=%s", id, e->ending_title);
-        loaded = load_movie(e, subdir, 2);
-        c09_trace("ending: video %s loaded=%d", subdir, loaded);
-        if (loaded) {
-            e->waiting = 0;
-            e->wait_auto = 0;
-            e->wait_kind = WAIT_NONE;
-            return;
-        }
-    }
     e->waiting = 1;
     e->wait_auto = 0;
     e->wait_kind = WAIT_ENDING;
+    e->line_shown = 0;
 }
 
 /* ------------------------------------------------------------------------- */
@@ -1563,6 +1787,9 @@ static void begin_ending(Engine *e, const char *id) {
 /* ------------------------------------------------------------------------- */
 
 static void enter_main_menu(Engine *e) {
+    if (e->video_active) {
+        video_release(e);
+    }
     e->mode = MODE_MENU;
     if (e->audio_ok) {
         Mix_Resume(-1);
@@ -1578,38 +1805,16 @@ static void enter_main_menu(Engine *e) {
     e->wait_auto = 0;
     e->wait_kind = WAIT_NONE;
     e->ending_active = 0;
-    history_reset(e);
     e->line_shown = 0;
     e->line[0] = 0;
     e->speaker[0] = 0;
     e->main_index = 0;
-    c09_trace("mode: main menu");
-    if (e->gui_menu_music[0] && !e->splash_active) {
+    e->boot_active = 0;
+    if (e->gui_menu_music[0]) {
         play_chunk(e, "music", e->gui_menu_music, 0, 1);
     }
-    if (e->new_ending) {
-        e->newmsg_active = 1;
-        e->newmsg_frame = 0;
-        e->newmsg_next = SDL_GetTicks();
-        e->newmsg_skip_at = e->newmsg_next + 900;
-        play_chunk(e, "sfx", "audio/NewTextAlert.mp3", 0, 0);
-    } else {
-        e->newmsg_active = 0;
-    }
-}
-
-static void enter_endings(Engine *e) {
-    e->mode = MODE_ENDINGS;
-    e->endings_index = 0;
-    e->endings_detail = 0;
-    e->endings_scroll = 0;
-    e->endings_top = 0;
-    e->newmsg_active = 0;
-    if (e->new_ending) {
-        e->new_ending = 0;
-        save_new_ending(e);
-    }
-    play_chunk(e, "sfx", "audio/Phone_slide.mp3", 0, 0);
+    /* The game's main menu backs the navigation with a looping video. */
+    video_start(e, "BG_living", 1, 3);
 }
 
 static void start_game(Engine *e) {
@@ -1617,6 +1822,9 @@ static void start_game(Engine *e) {
     int index = label_index(e, start);
     if (index < 0) {
         index = label_index(e, "start");
+    }
+    if (e->video_active) {
+        video_release(e);
     }
     stop_voice(e);
     stop_channel(e, "ambient", 0);
@@ -1632,12 +1840,11 @@ static void start_game(Engine *e) {
     e->line_shown = 0;
     e->voice[0] = 0;
     e->ending_active = 0;
-    e->newmsg_active = 0;
-    history_reset(e);
     e->hud = 1;
+    e->csbox = 0;
+    e->laptop_active = 0;
     e->pc = index >= 0 ? index : 0;
     e->mode = MODE_GAME;
-    c09_trace("mode: game start label=%s pc=%d", start, e->pc);
 }
 
 static void resume_game(Engine *e) {
@@ -1645,7 +1852,6 @@ static void resume_game(Engine *e) {
     Uint32 paused = now - e->pause_started;
     int i;
     e->mode = MODE_GAME;
-    c09_trace("mode: game resume pc=%d", e->pc);
     if (e->audio_ok) {
         Mix_Resume(0);
         Mix_Resume(1);
@@ -1679,7 +1885,6 @@ static void enter_pause(Engine *e) {
         }
     }
     e->mode = MODE_PAUSE;
-    c09_trace("mode: pause pc=%d", e->pc);
     if (e->audio_ok) {
         Mix_Pause(0);
         Mix_Pause(1);
@@ -1691,7 +1896,6 @@ static void enter_options(Engine *e, int return_mode) {
     e->options_return_mode = return_mode;
     e->options_index = 0;
     e->mode = MODE_OPTIONS;
-    c09_trace("mode: options from=%d", return_mode);
 }
 
 static void enter_load(Engine *e, int return_mode) {
@@ -1701,7 +1905,6 @@ static void enter_load(Engine *e, int return_mode) {
     e->file_area = 0;
     e->page_focus = 1;
     e->mode = MODE_LOAD;
-    c09_trace("mode: load from=%d", return_mode);
 }
 
 static void enter_save(Engine *e, int return_mode) {
@@ -1712,7 +1915,6 @@ static void enter_save(Engine *e, int return_mode) {
     e->file_area = 0;
     e->page_focus = 1;
     e->mode = MODE_SAVE;
-    c09_trace("mode: save from=%d", return_mode);
 }
 
 /* ------------------------------------------------------------------------- */
@@ -1724,62 +1926,12 @@ static void select_choice(Engine *e) {
     if (index >= 0 && index < e->choice_count) {
         play_chunk(e, "sfx", "audio/PhoneSelect.mp3", 0, 0);
         e->pc = e->choice_targets[index];
-        c09_trace("menu: chose %d -> pc=%d", index, e->pc);
         e->waiting = 0;
         e->wait_auto = 0;
         e->wait_kind = WAIT_NONE;
         e->choice_count = 0;
         e->choice_index = 0;
     }
-}
-
-static int load_intro(Engine *e);
-
-static void history_reset(Engine *e) { e->history_pos = 0; }
-
-static void history_push(Engine *e, int pc) {
-    HistoryEntry *entry;
-    if (e->history_pos > 0 && e->history[e->history_pos - 1].pc == pc) {
-        return; /* re-executed after a rollback: keep the older entries */
-    }
-    if (e->history_pos >= HISTORY_MAX) {
-        memmove(&e->history[0], &e->history[1], sizeof(HistoryEntry) * (HISTORY_MAX - 1));
-        e->history_pos = HISTORY_MAX - 1;
-    }
-    entry = &e->history[e->history_pos++];
-    entry->pc = pc;
-    entry->hud = e->hud;
-    entry->next_order = e->next_order;
-    entry->item_count = e->item_count;
-    entry->ending_active = e->ending_active;
-    memcpy(entry->items, e->items, sizeof(e->items));
-}
-
-static int history_back(Engine *e) {
-    HistoryEntry *entry;
-    if (e->history_pos <= 1) {
-        return 0;
-    }
-    e->history_pos--;
-    entry = &e->history[e->history_pos - 1];
-    e->pc = entry->pc;
-    e->hud = entry->hud;
-    e->next_order = entry->next_order;
-    e->item_count = entry->item_count;
-    e->ending_active = entry->ending_active;
-    memcpy(e->items, entry->items, sizeof(e->items));
-    e->waiting = 0;
-    e->wait_auto = 0;
-    e->wait_deadline = 0;
-    e->wait_kind = WAIT_NONE;
-    e->choice_count = 0;
-    e->choice_index = 0;
-    e->line_shown = 0;
-    e->line[0] = 0;
-    e->speaker[0] = 0;
-    stop_voice(e);
-    c09_trace("rollback: pc=%d", e->pc);
-    return 1;
 }
 
 static void execute_op(Engine *e) {
@@ -1802,7 +1954,6 @@ static void execute_op(Engine *e) {
         double start = op_num(op, 3);
         double end = op_num(op, 4);
         double duration = (end > start && end > 0.0) ? end - start : 0.0;
-        history_push(e, e->pc);
         e->pc++;
         copy_str(e->speaker, sizeof(e->speaker), op_str(op, 1));
         copy_str(e->line, sizeof(e->line), op_str(op, 2));
@@ -1840,17 +1991,8 @@ static void execute_op(Engine *e) {
         return;
     }
     if (strcmp(kind, "show") == 0) {
-        const char *item_kind = op_str(op, 4);
-        const char *item_arg = op_str(op, 5);
         e->pc++;
-        if (strcmp(item_kind, "movie") == 0 && !e->splash_active && item_arg[0] &&
-            (strstr(item_arg, "opening") || strstr(item_arg, "intro")) && load_intro(e)) {
-            e->waiting = 0;
-            e->wait_auto = 0;
-            e->wait_kind = WAIT_NONE;
-            return;
-        }
-        set_item(e, op_str(op, 1), op_str(op, 2), op_str(op, 3), item_kind, item_arg, op_int(op, 6),
+        set_item(e, op_str(op, 1), op_str(op, 2), op_str(op, 3), op_str(op, 4), op_str(op, 5), op_int(op, 6),
                  op_int(op, 7), op_int(op, 8), op_int(op, 9), (int)(op_num(op, 10) * 255.0 + 0.5), op_int(op, 11),
                  op_item(op, 12));
         return;
@@ -1887,7 +2029,12 @@ static void execute_op(Engine *e) {
         return;
     }
     if (strcmp(kind, "movie") == 0) {
+        char name[64];
         e->pc++;
+        video_name_from_file(op_str(op, 1), name, sizeof(name));
+        if (video_start(e, name, 0, 0)) {
+            return;
+        }
         e->waiting = 1;
         e->wait_auto = 1;
         e->wait_kind = WAIT_MOVIE;
@@ -1955,7 +2102,6 @@ static void execute_op(Engine *e) {
         e->waiting = e->choice_count > 0;
         e->wait_auto = 0;
         e->wait_kind = e->choice_count > 0 ? WAIT_MENU : WAIT_NONE;
-        c09_trace("menu: choices=%d pc=%d", e->choice_count, e->pc);
         return;
     }
     if (strcmp(kind, "if") == 0) {
@@ -1986,6 +2132,36 @@ static void execute_op(Engine *e) {
         e->pc++;
         return;
     }
+    if (strcmp(kind, "csbox") == 0) {
+        e->csbox = op_int(op, 1);
+        e->pc++;
+        return;
+    }
+    if (strcmp(kind, "start_jump") == 0) {
+        const char *first = op_str(op, 1);
+        const char *second = op_str(op, 2);
+        char target[64];
+        int index;
+        if (!e->start_variant[0]) {
+            copy_str(e->start_variant, sizeof(e->start_variant), "scene_0002B");
+        }
+        copy_str(target, sizeof(target), e->start_variant);
+        copy_str(e->start_variant, sizeof(e->start_variant),
+                 strcmp(target, first) == 0 ? second : first);
+        save_start_variant(e);
+        index = label_index(e, target);
+        e->pc = index >= 0 ? index : e->pc + 1;
+        return;
+    }
+    if (strcmp(kind, "call_screen") == 0) {
+        copy_str(e->laptop_target, sizeof(e->laptop_target), op_str(op, 2));
+        e->laptop_active = 1;
+        e->waiting = 1;
+        e->wait_auto = 0;
+        e->wait_kind = WAIT_LAPTOP;
+        e->pc++;
+        return;
+    }
     if (strcmp(kind, "ending_seen") == 0) {
         mark_seen(e, op_str(op, 1));
         e->pc++;
@@ -2001,7 +2177,7 @@ static void execute_op(Engine *e) {
 
 static void run_ops(Engine *e) {
     int guard = 0;
-    while (e->mode == MODE_GAME && !e->waiting && !e->splash_active && e->running && guard++ < 20000) {
+    while (e->mode == MODE_GAME && !e->waiting && e->running && guard++ < 20000) {
         execute_op(e);
     }
 }
@@ -2019,7 +2195,7 @@ enum {
     ACT_LEFT,
     ACT_RIGHT,
     ACT_PAUSE,
-    ACT_ENDINGS
+    ACT_TRACKER
 };
 
 static int wrap_index(int value, int count) {
@@ -2079,11 +2255,8 @@ static void file_confirm(Engine *e) {
     }
     if (is_save) {
         char message[64];
-        int ok;
         play_chunk(e, "sfx", "audio/MainMenuPress.mp3", 0, 0);
-        ok = save_game(e, slot);
-        c09_trace("save: slot=%d ok=%d", slot, ok);
-        if (ok) {
+        if (save_game(e, slot)) {
             snprintf(message, sizeof(message), "Saved to slot %02d", slot + 1);
             set_toast(e, message);
         } else {
@@ -2097,16 +2270,31 @@ static void file_confirm(Engine *e) {
     }
     play_chunk(e, "sfx", "audio/MainMenuPress.mp3", 0, 0);
     if (load_game(e, slot)) {
-        c09_trace("load: slot=%d ok=1", slot);
         e->mode = return_mode;
         resume_game(e);
     } else {
-        c09_trace("load: slot=%d ok=0", slot);
         set_toast(e, "Could not load that save");
     }
 }
 
 static void on_confirm(Engine *e) {
+    if (e->video_active && e->video_mode != 3) {
+        if (e->video_mode == 2) {
+            e->boot_index = BOOT_COUNT;
+        }
+        video_finish(e);
+        return;
+    }
+    if (e->mode == MODE_GAME && e->wait_kind == WAIT_LAPTOP) {
+        int index = label_index(e, e->laptop_target);
+        e->laptop_active = 0;
+        e->waiting = 0;
+        e->wait_kind = WAIT_NONE;
+        if (index >= 0) {
+            e->pc = index;
+        }
+        return;
+    }
     if (e->mode == MODE_MENU) {
         play_chunk(e, "sfx", "audio/MainMenuPress.mp3", 0, 0);
         if (e->main_index == 0) {
@@ -2123,20 +2311,8 @@ static void on_confirm(Engine *e) {
             enter_options(e, MODE_MENU);
         } else if (e->main_index == 3) {
             e->mode = MODE_ABOUT;
-        } else if (e->main_index == 4) {
+        } else {
             e->running = 0;
-        } else if (e->main_index == 5) {
-            enter_endings(e);
-        }
-        return;
-    }
-    if (e->mode == MODE_ENDINGS) {
-        play_chunk(e, "sfx", "audio/Phone_button.mp3", 0, 0);
-        if (e->endings_detail) {
-            e->endings_detail = 0;
-        } else if (e->seen_count > 0) {
-            e->endings_detail = 1;
-            e->endings_scroll = 0;
         }
         return;
     }
@@ -2192,22 +2368,22 @@ static void on_confirm(Engine *e) {
         e->mode = MODE_MENU;
         return;
     }
+    if (e->mode == MODE_TRACKER) {
+        if (e->seen_count > 0) {
+            e->tracker_text = !e->tracker_text;
+            play_chunk(e, "sfx", "audio/Phone_button.mp3", 0, 0);
+        }
+        return;
+    }
 }
 
 static void on_back(Engine *e) {
     if (e->mode == MODE_GAME) {
-        if (!e->ending_active && e->wait_kind != WAIT_MENU) {
-            history_back(e);
+        if (!e->ending_active) {
+            enter_pause(e);
         }
     } else if (e->mode == MODE_PAUSE) {
         resume_game(e);
-    } else if (e->mode == MODE_ENDINGS) {
-        play_chunk(e, "sfx", "audio/Phone_close.mp3", 0, 0);
-        if (e->endings_detail) {
-            e->endings_detail = 0;
-        } else {
-            e->mode = MODE_MENU;
-        }
     } else if (e->mode == MODE_SAVE) {
         e->mode = e->save_return_mode;
     } else if (e->mode == MODE_LOAD) {
@@ -2216,37 +2392,15 @@ static void on_back(Engine *e) {
         e->mode = e->options_return_mode;
     } else if (e->mode == MODE_ABOUT) {
         e->mode = MODE_MENU;
+    } else if (e->mode == MODE_TRACKER) {
+        e->mode = MODE_MENU;
     }
 }
 
 static void on_nav(Engine *e, int delta) {
-    if (e->mode == MODE_ENDINGS) {
-        if (e->endings_detail) {
-            e->endings_scroll += delta * 80;
-            if (e->endings_scroll < 0) {
-                e->endings_scroll = 0;
-            }
-            if (e->endings_scroll > 1600) {
-                e->endings_scroll = 1600;
-            }
-        } else if (e->seen_count > 0) {
-            e->endings_index = wrap_index(e->endings_index + delta, e->seen_count);
-            play_chunk(e, "sfx", "audio/Phone_button.mp3", 0, 0);
-        }
-        return;
-    }
     if (e->mode == MODE_MENU) {
-        int next = e->main_index + delta;
-        if (next < 0) {
-            next = 0;
-        }
-        if (next > 5) {
-            next = 5;
-        }
-        if (next != e->main_index) {
-            e->main_index = next;
-            play_chunk(e, "sfx", "audio/MainMenuRollover.mp3", 0, 0);
-        }
+        e->main_index = wrap_index(e->main_index + delta, 5);
+        play_chunk(e, "sfx", "audio/MainMenuRollover.mp3", 0, 0);
     } else if (e->mode == MODE_GAME) {
         if (e->wait_kind == WAIT_MENU && e->choice_count > 0) {
             e->choice_index = wrap_index(e->choice_index + delta, e->choice_count);
@@ -2273,6 +2427,11 @@ static void on_nav(Engine *e, int delta) {
         }
     } else if (e->mode == MODE_OPTIONS) {
         e->options_index = wrap_index(e->options_index + delta, 3);
+        play_chunk(e, "sfx", "audio/MainMenuRollover.mp3", 0, 0);
+    } else if (e->mode == MODE_TRACKER) {
+        if (e->seen_count > 0) {
+            e->tracker_index = wrap_index(e->tracker_index + delta, e->seen_count);
+        }
         play_chunk(e, "sfx", "audio/MainMenuRollover.mp3", 0, 0);
     }
 }
@@ -2327,14 +2486,6 @@ static void on_adjust(Engine *e, int delta) {
 }
 
 static void handle_action(Engine *e, int action) {
-    c09_trace("act: %d mode=%d pc=%d wait=%d line=%s", action, (int)e->mode, e->pc, e->waiting,
-              e->line);
-    if (e->newmsg_active && e->mode == MODE_MENU) {
-        if (SDL_GetTicks() >= e->newmsg_skip_at) {
-            e->newmsg_active = 0;
-        }
-        return;
-    }
     switch (action) {
     case ACT_CONFIRM:
         on_confirm(e);
@@ -2363,11 +2514,12 @@ static void handle_action(Engine *e, int action) {
             on_back(e);
         }
         break;
-    case ACT_ENDINGS:
+    case ACT_TRACKER:
         if (e->mode == MODE_MENU && e->seen_count > 0) {
-            enter_endings(e);
-        } else if (e->mode == MODE_ENDINGS) {
-            on_back(e);
+            e->mode = MODE_TRACKER;
+            e->tracker_index = 0;
+            e->tracker_text = 0;
+            play_chunk(e, "sfx", "audio/Phone_slide.mp3", 0, 0);
         }
         break;
     default:
@@ -2398,7 +2550,7 @@ static int key_action(SDL_Keycode key) {
     case SDLK_TAB:
         return ACT_PAUSE;
     case SDLK_e:
-        return ACT_ENDINGS;
+        return ACT_TRACKER;
     default:
         return ACT_NONE;
     }
@@ -2421,8 +2573,8 @@ static int button_action(Uint8 button) {
     case SDL_CONTROLLER_BUTTON_START:
     case SDL_CONTROLLER_BUTTON_BACK:
         return ACT_PAUSE;
-    case SDL_CONTROLLER_BUTTON_Y:
-        return ACT_ENDINGS;
+    case SDL_CONTROLLER_BUTTON_X:
+        return ACT_TRACKER;
     default:
         return ACT_NONE;
     }
@@ -2448,10 +2600,7 @@ static void poll_events(Engine *e) {
         if (e->splash_active) {
             if (event.type == SDL_KEYDOWN || event.type == SDL_CONTROLLERBUTTONDOWN ||
                 event.type == SDL_MOUSEBUTTONDOWN) {
-                /* Ending videos play to the end; the intro and logo may be skipped. */
-                if (e->splash_mode != 2 && SDL_GetTicks() >= e->splash_skip_at) {
-                    finish_splash(e);
-                }
+                finish_splash(e);
                 continue;
             }
             if (event.type != SDL_CONTROLLERDEVICEADDED && event.type != SDL_CONTROLLERDEVICEREMOVED) {
@@ -2645,6 +2794,14 @@ static void draw_item(Engine *e, LayerItem *item) {
 
 static void draw_dialogue(Engine *e) {
     int textbox_h = 0;
+    /* Re-Up cutscene dialogue: yellow text directly on the scene, no box. */
+    if (e->csbox) {
+        if (!e->line[0]) {
+            return;
+        }
+        draw_text(e, FONT_CSBOX, e->line, 0xF7DD74, 950, 230, 852, 0, 0);
+        return;
+    }
     if (!e->hud) {
         return;
     }
@@ -2674,57 +2831,31 @@ static void draw_dialogue(Engine *e) {
 
 static void draw_choices(Engine *e) {
     int i;
-    int y = e->gui_choice_y;
     if (e->gui_choice_window[0]) {
         draw_image(e, e->gui_choice_window, 0, 0, SCREEN_W, SCREEN_H, 255, 0);
     } else {
         fill_rect(e, 0, 0, SCREEN_W, SCREEN_H, 0x000000, 90);
     }
     for (i = 0; i < e->choice_count; i++) {
-        int row_h = e->gui_choice_h;
+        int y = e->gui_choice_y + i * (e->gui_choice_h + e->gui_choice_spacing);
         Uint32 color = (i == e->choice_index) ? e->gui_choice_hover_color : e->gui_choice_idle_color;
         const char *background = (i == e->choice_index) ? e->gui_choice_hover : e->gui_choice_idle;
         TextBlock *block;
-        TTF_Font *font;
         int height;
-        int text_width = 0;
-        int text_height = 0;
-        int text_font = FONT_CHOICE;
-        /* The shipped button art is 1185 px wide with transparent margins; the
-         * visible strip is ~766 px, so wrap and shrink text to that width. */
-        const int wrap = 720;
-        font = ensure_font(e, FONT_CHOICE);
-        if (font && TTF_SizeUTF8(font, e->choice_text[i], &text_width, &text_height) == 0 &&
-            text_width > wrap) {
-            text_font = FONT_CHOICE_SMALL;
-        }
-        block = text_block(e, text_font, e->choice_text[i], color, wrap);
-        height = block_height(e, block, 0);
-        if (height + 12 > row_h) {
-            row_h = height + 12;
-        }
         if (background[0]) {
-            draw_image(e, background, e->gui_choice_x, y, e->gui_choice_w, row_h, 255, 0);
+            draw_image(e, background, e->gui_choice_x, y, e->gui_choice_w, e->gui_choice_h, 255, 0);
         }
-        draw_block(e, block, e->gui_choice_x + e->gui_choice_w / 2, y + (row_h - height) / 2, 1, 0);
-        y += row_h + e->gui_choice_spacing;
+        block = text_block(e, FONT_CHOICE, e->choice_text[i], color, e->gui_choice_w - 40);
+        height = block_height(e, block, 0);
+        draw_block(e, block, e->gui_choice_x + e->gui_choice_w / 2, y + (e->gui_choice_h - height) / 2, 1, 0);
     }
 }
 
 static void draw_ending(Engine *e) {
-    int fonts[3] = {FONT_BODY, FONT_SMALL, FONT_BODY_TINY};
-    int k;
     fill_rect(e, 0, 0, SCREEN_W, SCREEN_H, 0x000000, 255);
     draw_text(e, FONT_TITLE, e->ending_title, 0x279BE8, 0, SCREEN_W / 2, 110, 1, 0);
     if (e->ending_body[0]) {
-        for (k = 0; k < 3; k++) {
-            TextBlock *block = text_block(e, fonts[k], e->ending_body, 0xEDEDED, 1400);
-            int height = block_height(e, block, 4);
-            if (height <= SCREEN_H - 270 - 80 || k == 2) {
-                draw_block(e, block, 260, 270, 0, 4);
-                break;
-            }
-        }
+        draw_text(e, FONT_BODY, e->ending_body, 0xEDEDED, 1400, 260, 270, 0, 4);
     }
     draw_text(e, FONT_SMALL, "Cross / Enter to continue", 0x888888, 0, SCREEN_W / 2, SCREEN_H - 50, 1, 0);
 }
@@ -2751,9 +2882,26 @@ static void draw_layer(Engine *e, const char *layer) {
     }
 }
 
+static void draw_laptop(Engine *e) {
+    const int w = 1336;
+    const int h = 751;
+    const int x = (SCREEN_W - w) / 2;
+    const int y = (SCREEN_H - h) / 2;
+    fill_rect(e, 0, 0, SCREEN_W, SCREEN_H, 0x000000, 170);
+    draw_image(e, "laptopsearch/laptopshell.png", x, y, w, h, 255, 0);
+    draw_image(e, "laptopsearch/laptopscreen.png", x, y, w, h, 255, 0);
+    draw_image(e, "laptopsearch/laptopsearchrollover.png", x + 556, y + 285, 104, 20, 255, 0);
+    draw_image(e, "laptopsearch/laptopscreenoverlay.png", x, y, w, h, 255, 0);
+    draw_text(e, FONT_SMALL, "Cross / Enter: search the web", 0xFFFFFF, 0, x + 40, y + h - 50, 0, 0);
+}
+
 static void draw_world(Engine *e) {
     draw_layer(e, "master");
     draw_layer(e, "screens");
+    if (e->laptop_active) {
+        draw_laptop(e);
+        return;
+    }
     if (e->ending_active) {
         draw_ending(e);
         return;
@@ -2763,10 +2911,6 @@ static void draw_world(Engine *e) {
         return;
     }
     draw_dialogue(e);
-    if (e->mode == MODE_GAME && !e->ending_active && e->wait_kind != WAIT_MENU) {
-        draw_image(e, "gui/back_pills_vert.png", 156, 836, 110, 240, 255, 0);
-        draw_image(e, "gui/pause_phone.png", 1515, 884, 350, 176, 255, 0);
-    }
 }
 
 /* ------------------------------------------------------------------------- */
@@ -2782,11 +2926,14 @@ static void draw_rows(Engine *e, const char *const *labels, int count, int selec
 }
 
 static const char *MAIN_BUTTONS[5] = {"NEWGAME", "CONTINUE", "OPTIONS", "ABOUT", "EXIT"};
+static const char *MAIN_ART[5] = {"newgame2", "continue2", "options2", "about2", "exit2"};
 
 static void draw_main_menu(Engine *e) {
     int i;
     char rel[MAX_PATH];
-    if (e->gui_main_menu[0]) {
+    if (e->video_active && e->video_mode == 3) {
+        draw_video(e);
+    } else if (e->gui_main_menu[0]) {
         draw_image(e, e->gui_main_menu, 0, 0, SCREEN_W, SCREEN_H, 255, 0);
     } else {
         fill_rect(e, 0, 0, SCREEN_W, SCREEN_H, 0x1A1A22, 255);
@@ -2794,45 +2941,18 @@ static void draw_main_menu(Engine *e) {
     if (e->gui_logo[0]) {
         draw_image(e, e->gui_logo, e->gui_logo_x, e->gui_logo_y, e->gui_logo_w, e->gui_logo_h, 255, 0);
     }
+    /* The Re-Up's own navigation art (full-frame overlays, one per button). */
     for (i = 0; i < 5; i++) {
-        snprintf(rel, sizeof(rel), "images/%s.png", MAIN_BUTTONS[i]);
+        snprintf(rel, sizeof(rel), "gui/menu 2/%s.png", MAIN_ART[i]);
         draw_image(e, rel, 0, 0, SCREEN_W, SCREEN_H, 255, 0);
     }
-    if (e->main_index < 5) {
-        snprintf(rel, sizeof(rel), "images/%s_selected.png", MAIN_BUTTONS[e->main_index]);
-        draw_image(e, rel, 0, 0, SCREEN_W, SCREEN_H, 255, 0);
-    }
-    draw_image(e, "gui/ending_tracker/text_access.png", 1569, 864, 225, 120, 255, 0);
-    if (e->main_index == 5) {
-        fill_rect(e, 1558, 853, 248, 4, 0x66C1E0, 255);
-        fill_rect(e, 1558, 991, 248, 4, 0x66C1E0, 255);
-        fill_rect(e, 1558, 853, 4, 142, 0x66C1E0, 255);
-        fill_rect(e, 1802, 853, 4, 142, 0x66C1E0, 255);
-    }
-    draw_text(e, FONT_SMALL,
-              e->main_index == 5
-                  ? "Cross: endings   D-pad: move   Triangle: endings"
-                  : "Cross: select   D-pad: move   Triangle: endings",
-              0x9A9A9A, 0, 30, SCREEN_H - 40, 0, 0);
-}
-
-static void draw_new_message(Engine *e) {
-    char rel[MAX_PATH];
-    Uint32 now;
-    if (!e->newmsg_active) {
-        return;
-    }
-    now = SDL_GetTicks();
-    if (now >= e->newmsg_next) {
-        e->newmsg_frame++;
-        e->newmsg_next = now + 50;
-        if (e->newmsg_frame >= 59) {
-            e->newmsg_active = 0;
-            return;
-        }
-    }
-    snprintf(rel, sizeof(rel), "NewMessageSequence/NewMessage_%04d.png", e->newmsg_frame + 1);
+    snprintf(rel, sizeof(rel), "gui/menu 2/%s_ro.png", MAIN_ART[e->main_index]);
     draw_image(e, rel, 0, 0, SCREEN_W, SCREEN_H, 255, 0);
+    if (e->seen_count > 0) {
+        draw_image(e, "gui/ending_tracker/text_access.png", 1567, 864, 225, 120, 255, 0);
+    }
+    draw_text(e, FONT_SMALL, "Unofficial homebrew runtime  -  Cross: select   D-pad: move", 0x9A9A9A, 0, 30,
+              SCREEN_H - 40, 0, 0);
 }
 
 static const char *PAUSE_LABELS[6] = {"Resume", "Save Game", "Load Game", "Options", "Main Menu", "Quit"};
@@ -2954,6 +3074,64 @@ static void draw_options(Engine *e) {
     draw_text(e, FONT_SMALL, "Left / Right changes the selected value", 0x777777, 0, SCREEN_W / 2, 700, 1, 0);
 }
 
+static JsonValue *ending_by_id(Engine *e, const char *id) {
+    size_t i;
+    if (!e->endings || e->endings->type != JL_ARRAY) {
+        return NULL;
+    }
+    for (i = 0; i < e->endings->u.array.count; i++) {
+        JsonValue *item = e->endings->u.array.items[i];
+        if (item && item->type == JL_OBJECT && strcmp(obj_str(item, "id", ""), id) == 0) {
+            return item;
+        }
+    }
+    return NULL;
+}
+
+static void draw_tracker(Engine *e) {
+    char count[32];
+    int total = (e->endings && e->endings->type == JL_ARRAY) ? (int)e->endings->u.array.count : 7;
+    int i;
+    /* The phone art at natural size; its LCD opening is the area the game's
+     * 1.7x transform maps a 1920x1080 screen onto, so draw the UI scaled into
+     * (356,245) 1129x635 and keep the whole handset visible. */
+    const int hx = 356;
+    const int hy = 245;
+    const int hw = 1129;
+    const int hh = 635;
+    const double sx = (double)hw / (double)SCREEN_W;
+    const double sy = (double)hh / (double)SCREEN_H;
+    draw_image(e, "gui/ending_tracker/ending_tracker_pda.png", 0, 0, SCREEN_W, SCREEN_H, 255, 0);
+    draw_image(e, "gui/ending_tracker/base_screen.png", hx, hy, hw, hh, 255, 0);
+    snprintf(count, sizeof(count), "%d / %d", e->seen_count, total);
+    draw_text(e, FONT_TRACKER, count, 0xFFFFFF, 0, hx + (int)(405 * sx), hy + (int)(129 * sy), 0, 0);
+    if (e->tracker_text && e->seen_count > 0) {
+        JsonValue *item = ending_by_id(e, e->seen[e->tracker_index]);
+        if (item) {
+            draw_text(e, FONT_TRACKER, obj_str(item, "text", ""), 0x000000,
+                      (int)(1200 * sx), hx + (int)(260 * sx), hy + (int)(230 * sy), 0, 2);
+        }
+    } else {
+        for (i = 0; i < e->seen_count; i++) {
+            JsonValue *item = ending_by_id(e, e->seen[i]);
+            const char *title = item ? obj_str(item, "title", e->seen[i]) : e->seen[i];
+            if (i == e->tracker_index) {
+                draw_image(e, "gui/ending_tracker/highlight_bar.png", hx + (int)(260 * sx),
+                           hy + (int)(222 * sy) + (int)(i * 70 * sy), (int)(1288 * sx),
+                           (int)(70 * sy), 255, 0);
+            }
+            draw_text(e, FONT_TRACKER, title, 0x000000, 0, hx + (int)(285 * sx),
+                      hy + (int)(230 * sy) + (int)(i * 70 * sy), 0, 0);
+        }
+        if (e->seen_count == 0) {
+            draw_text(e, FONT_TRACKER, "No endings found yet.", 0x000000, 0, hx + (int)(285 * sx),
+                      hy + (int)(230 * sy), 0, 0);
+        }
+    }
+    draw_text(e, FONT_SMALL, "Cross: read   Circle: back   D-pad: choose", 0x444444, 0, hx,
+              SCREEN_H - 24, 0, 0);
+}
+
 static void draw_about(Engine *e) {
     char body[MAX_TEXT];
     int total = (e->endings && e->endings->type == JL_ARRAY) ? (int)e->endings->u.array.count : 15;
@@ -2966,116 +3144,13 @@ static void draw_about(Engine *e) {
              "their owners and are read from the copy of Class of '09 installed with this app.\n\n"
              "Endings discovered: %d / %d\n\n"
              "Cross: advance / confirm\n"
-             "Circle: step back one line\n"
-             "Triangle: ending tracker (main menu)\n"
+             "Circle: back, or pause during a scene\n"
              "D-pad: navigate\n"
              "Options / Start: in-game menu\n\n"
              "Not affiliated with the developers, publishers, or Sony.",
              e->seen_count, total);
     draw_text(e, FONT_SMALL, body, 0xDDDDDD, 1300, 260, 190, 0, 8);
     draw_text(e, FONT_SMALL, "Cross to return", 0x777777, 0, SCREEN_W / 2, SCREEN_H - 60, 1, 0);
-}
-
-static JsonValue *seen_ending_at(Engine *e, int index) {
-    int i;
-    int found = 0;
-    int total;
-    if (!e->endings || e->endings->type != JL_ARRAY) {
-        return NULL;
-    }
-    total = (int)e->endings->u.array.count;
-    for (i = 0; i < total; i++) {
-        JsonValue *item = e->endings->u.array.items[i];
-        const char *id = obj_str(item, "id", NULL);
-        if (id && ending_is_seen(e, id)) {
-            if (found == index) {
-                return item;
-            }
-            found++;
-        }
-    }
-    return NULL;
-}
-
-static void draw_endings(Engine *e) {
-    char text[64];
-    char row[512];
-    int i;
-    int total = (e->endings && e->endings->type == JL_ARRAY) ? (int)e->endings->u.array.count : 15;
-    time_t now;
-    struct tm *clock_now;
-    JsonValue *item;
-
-    /* The PDA photo is 1920x1080; the game's transform zooms it to 1.7 and
-     * centers it. 2.05 keeps the messaging screen inside the phone's display. */
-    draw_image(e, "gui/ending_tracker/ending_tracker_pda.png", -1000, -596, 3936, 2214, 255, 0);
-    draw_image(e, "gui/ending_tracker/base_screen.png", 0, 0, SCREEN_W, SCREEN_H, 255, 0);
-
-    snprintf(text, sizeof(text), "%d/%d", e->seen_count, total);
-    draw_text(e, FONT_MONO, text, 0x2370BE, 0, 407, 131, 0, 0);
-    draw_text(e, FONT_MONO, text, 0xFFFFFF, 0, 405, 129, 0, 0);
-
-    now = time(NULL);
-    clock_now = localtime(&now);
-    if (clock_now) {
-        int hour = clock_now->tm_hour % 12;
-        if (hour == 0) {
-            hour = 12;
-        }
-        snprintf(text, sizeof(text), "%02d:%02d", hour, clock_now->tm_min);
-        draw_text(e, FONT_MONO, text, 0x0000CC, 0, 1240, 62, 0, 0);
-    }
-
-    if (e->endings_detail) {
-        item = seen_ending_at(e, e->endings_index);
-        if (item) {
-            draw_text(e, FONT_BODY_TINY, obj_str(item, "text", ""), 0x000000, 1230, 270,
-                      250 - e->endings_scroll, 0, 6);
-            draw_text(e, FONT_MONO, obj_str(item, "id", ""), 0x2370BE, 0, 1300, 60, 0, 0);
-        }
-        draw_text(e, FONT_SMALL, "D-pad: scroll   Cross / Circle: back", 0x2370BE, 0, 280, 940, 0, 0);
-        return;
-    }
-
-    {
-        const int rows = 10;
-        int last;
-        if (e->endings_index < e->endings_top) {
-            e->endings_top = e->endings_index;
-        }
-        if (e->endings_index >= e->endings_top + rows) {
-            e->endings_top = e->endings_index - rows + 1;
-        }
-        if (e->endings_top > e->seen_count - rows && e->seen_count > rows) {
-            e->endings_top = e->seen_count - rows;
-        }
-        if (e->endings_top < 0) {
-            e->endings_top = 0;
-        }
-        last = e->endings_top + rows;
-        if (last > e->seen_count) {
-            last = e->seen_count;
-        }
-        for (i = e->endings_top; i < last; i++) {
-            int y = 230 + (i - e->endings_top) * 70;
-            item = seen_ending_at(e, i);
-            if (!item) {
-                continue;
-            }
-            if (i == e->endings_index) {
-                draw_image(e, "gui/ending_tracker/highlight_bar.png", 260, y, 1288, 70, 255, 0);
-            }
-            snprintf(row, sizeof(row), "%s", obj_str(item, "title", "UNKNOWN"));
-            if (strlen(row) > 36) {
-                copy_str(row + 33, 4, "...");
-            }
-            draw_text(e, FONT_PHONE, row, i == e->endings_index ? 0xFFFFFF : 0x000000, 0, 285, y + 10, 0, 0);
-        }
-    }
-    if (e->seen_count == 0) {
-        draw_text(e, FONT_PHONE, "No endings collected yet.", 0x000000, 0, 285, 240, 0, 0);
-    }
-    draw_text(e, FONT_SMALL, "D-pad: choose/scroll   Cross: read   Circle: back", 0x2370BE, 0, 280, 940, 0, 0);
 }
 
 static void draw_toast(Engine *e) {
@@ -3239,18 +3314,10 @@ static void load_gui(Engine *e) {
     copy_str(e->font_paths[FONT_NAME], MAX_PATH, "HELVETICA_EXTRA_COMPRESSED.TTF");
     copy_str(e->font_paths[FONT_CHOICE], MAX_PATH, "HELVETICA_LT_NARROW.TTF");
     copy_str(e->font_paths[FONT_MENU], MAX_PATH, "FUTURA.TTF");
-    copy_str(e->font_paths[FONT_CHOICE_SMALL], MAX_PATH, "HELVETICA_LT_NARROW.TTF");
     e->font_sizes[FONT_DIALOGUE] = 50;
     e->font_sizes[FONT_NAME] = 60;
     e->font_sizes[FONT_CHOICE] = 60;
     e->font_sizes[FONT_MENU] = 60;
-    e->font_sizes[FONT_CHOICE_SMALL] = 48;
-    copy_str(e->font_paths[FONT_MONO], MAX_PATH, "joystix monospace.ttf");
-    copy_str(e->font_paths[FONT_PHONE], MAX_PATH, "texting2007.ttf");
-    copy_str(e->font_paths[FONT_BODY_TINY], MAX_PATH, "HELVETICA_LT_NARROW.TTF");
-    e->font_sizes[FONT_MONO] = 48;
-    e->font_sizes[FONT_PHONE] = 40;
-    e->font_sizes[FONT_BODY_TINY] = 26;
 
     if (gui && gui->type == JL_OBJECT) {
         copy_str(e->gui_textbox, sizeof(e->gui_textbox), obj_str(gui, "textbox", e->gui_textbox));
@@ -3293,8 +3360,6 @@ static void load_gui(Engine *e) {
             copy_str(e->font_paths[FONT_CHOICE], MAX_PATH,
                      obj_str(choice, "font", "HELVETICA_LT_NARROW.TTF"));
             e->font_sizes[FONT_CHOICE] = obj_int(choice, "size", 60);
-            copy_str(e->font_paths[FONT_CHOICE_SMALL], MAX_PATH, e->font_paths[FONT_CHOICE]);
-            e->font_sizes[FONT_CHOICE_SMALL] = e->font_sizes[FONT_CHOICE] * 4 / 5;
         }
         menu = obj_get(gui, "menu");
         if (menu && menu->type == JL_OBJECT) {
@@ -3321,6 +3386,12 @@ static void load_gui(Engine *e) {
     e->font_sizes[FONT_BODY] = 40;
     copy_str(e->font_paths[FONT_SLOT], MAX_PATH, "FUTURA.TTF");
     e->font_sizes[FONT_SLOT] = 21;
+    /* The Re-Up's cutscene dialogue: Helvetica Narrow 42, yellow, no box. */
+    copy_str(e->font_paths[FONT_CSBOX], MAX_PATH, "HELVETICA_LT_NARROW.TTF");
+    e->font_sizes[FONT_CSBOX] = 42;
+    /* Ending tracker text, sized for the LCD inside the phone art. */
+    copy_str(e->font_paths[FONT_TRACKER], MAX_PATH, "HELVETICA_LT_NARROW.TTF");
+    e->font_sizes[FONT_TRACKER] = 24;
 }
 
 static void load_fonts(Engine *e) {
@@ -3339,9 +3410,7 @@ static void load_splash(Engine *e);
 int engine_init(Engine *e, const char *script_path, const char *game_dir) {
     const char *script;
     const char *game;
-#ifndef __PROSPERO__
     char dir[MAX_PATH];
-#endif
     char *text;
     size_t len = 0;
     int i;
@@ -3374,8 +3443,6 @@ int engine_init(Engine *e, const char *script_path, const char *game_dir) {
 #endif
     copy_str(e->script_path, sizeof(e->script_path), script);
     copy_str(e->game_dir, sizeof(e->game_dir), game);
-    c09_trace("engine: paths script=%s game=%s save=%s data=%s", e->script_path, e->game_dir,
-              e->save_dir, e->data_dir);
 
     e->opt_music = 7;
     e->opt_voice = 10;
@@ -3386,11 +3453,9 @@ int engine_init(Engine *e, const char *script_path, const char *game_dir) {
 
     text = read_file(script, &len);
     if (!text) {
-        c09_trace("engine: cannot read script file: %s", script);
         printf("class09: cannot read script file: %s\n", script);
         return 0;
     }
-    c09_trace("engine: script read (%u bytes)", (unsigned)len);
     e->root = json_parse(text);
     free(text);
     if (!e->root || e->root->type != JL_OBJECT) {
@@ -3411,22 +3476,18 @@ int engine_init(Engine *e, const char *script_path, const char *game_dir) {
     }
 
     if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_GAMECONTROLLER | SDL_INIT_EVENTS) != 0) {
-        c09_trace("engine: SDL_Init failed: %s", SDL_GetError());
         printf("class09: SDL_Init failed: %s\n", SDL_GetError());
         json_free(e->root);
         e->root = NULL;
         return 0;
     }
-    c09_trace("engine: SDL_Init ok");
     SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "1");
 
     {
-#ifndef __PROSPERO__
         const char *capture = getenv("CLASS09_CAPTURE");
         if (capture && capture[0]) {
             e->capture_at = SDL_GetTicks() + (Uint32)atoi(capture);
         }
-#endif
     }
 
 #ifdef __PROSPERO__
@@ -3437,36 +3498,29 @@ int engine_init(Engine *e, const char *script_path, const char *game_dir) {
                                  SDL_WINDOW_SHOWN | SDL_WINDOW_RESIZABLE);
 #endif
     if (!e->window) {
-        c09_trace("engine: SDL_CreateWindow failed: %s", SDL_GetError());
         printf("class09: SDL_CreateWindow failed: %s\n", SDL_GetError());
         engine_shutdown(e);
         return 0;
     }
-    c09_trace("engine: window created");
     e->renderer = SDL_CreateRenderer(e->window, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
     if (!e->renderer) {
         e->renderer = SDL_CreateRenderer(e->window, -1, SDL_RENDERER_SOFTWARE);
     }
     if (!e->renderer) {
-        c09_trace("engine: SDL_CreateRenderer failed: %s", SDL_GetError());
         printf("class09: SDL_CreateRenderer failed: %s\n", SDL_GetError());
         engine_shutdown(e);
         return 0;
     }
-    c09_trace("engine: renderer created");
     SDL_RenderSetLogicalSize(e->renderer, SCREEN_W, SCREEN_H);
     SDL_SetRenderDrawBlendMode(e->renderer, SDL_BLENDMODE_BLEND);
     SDL_ShowCursor(SDL_DISABLE);
 
     if (IMG_Init(IMG_INIT_PNG | IMG_INIT_JPG) == 0) {
-        c09_trace("engine: IMG_Init failed: %s", IMG_GetError());
         printf("class09: IMG_Init failed: %s\n", IMG_GetError());
     }
     if (TTF_Init() != 0) {
-        c09_trace("engine: TTF_Init failed: %s", TTF_GetError());
         printf("class09: TTF_Init failed: %s\n", TTF_GetError());
     }
-    c09_trace("engine: image+font subsystems ready");
 
 #ifdef MIX_INIT_MP3
     audio_flags |= MIX_INIT_MP3;
@@ -3480,29 +3534,49 @@ int engine_init(Engine *e, const char *script_path, const char *game_dir) {
         Mix_AllocateChannels(8);
         Mix_VolumeMusic(MIX_MAX_VOLUME);
     } else {
-        c09_trace("engine: Mix_OpenAudio failed: %s", Mix_GetError());
         printf("class09: Mix_OpenAudio failed: %s\n", Mix_GetError());
         e->audio_ok = 0;
     }
-    c09_trace("engine: audio ready (ok=%d)", e->audio_ok);
 
     ensure_save_dir(e);
-    c09_trace("engine: save dir ready");
     load_seen(e);
-    load_new_ending(e);
+    load_start_variant(e);
     load_gui(e);
     load_fonts(e);
-    c09_trace("engine: gui+fonts loaded");
     apply_volumes(e);
-    load_splash(e);
-    c09_trace("engine: splash loaded");
 
     for (i = 0; i < SDL_NumJoysticks(); i++) {
         open_controller(e, i);
     }
 
-    enter_main_menu(e);
-    c09_trace("engine: main menu entered");
+#ifndef __PROSPERO__
+    {
+        const char *autostart = getenv("CLASS09_AUTOSTART");
+        const char *start_label = getenv("CLASS09_START_LABEL");
+        if (autostart && autostart[0] == '1') {
+            int index;
+            enter_main_menu(e);
+            start_game(e);
+            index = (start_label && start_label[0]) ? label_index(e, start_label) : -1;
+            if (index >= 0) {
+                e->pc = index;
+            }
+        } else {
+            const char *tracker = getenv("CLASS09_TRACKER");
+            if (tracker && tracker[0] == '1') {
+                enter_main_menu(e);
+                video_release(e);
+                e->mode = MODE_TRACKER;
+                e->tracker_index = 0;
+                e->tracker_text = 0;
+            } else {
+                video_boot(e);
+            }
+        }
+    }
+#else
+    video_boot(e);
+#endif
     return 1;
 }
 
@@ -3510,11 +3584,6 @@ void engine_shutdown(Engine *e) {
     int i;
     if (!e) {
         return;
-    }
-    if (e->intro_music) {
-        Mix_HaltMusic();
-        Mix_FreeMusic(e->intro_music);
-        e->intro_music = NULL;
     }
     if (e->audio_ok) {
         Mix_HaltChannel(-1);
@@ -3619,7 +3688,7 @@ static int path_exists(const char *path) {
     return 1;
 }
 
-static int load_splash_dir(Engine *e, const char *subdir, int mode) {
+static void load_splash(Engine *e) {
     char manifest[SPLASH_PATH_MAX];
     char line[256];
     char frame[SPLASH_PATH_MAX];
@@ -3630,16 +3699,14 @@ static int load_splash_dir(Engine *e, const char *subdir, int mode) {
     int height = SCREEN_H;
 
     e->splash_active = 0;
-    e->splash_mode = mode;
     if (!e->data_dir[0]) {
-        return 0;
+        return;
     }
-    snprintf(e->splash_dir, sizeof(e->splash_dir), "%s/%s", e->data_dir, subdir);
+    snprintf(e->splash_dir, sizeof(e->splash_dir), "%s/videos/logosplash", e->data_dir);
     snprintf(manifest, sizeof(manifest), "%s/manifest.txt", e->splash_dir);
     file = fopen(manifest, "rb");
     if (!file) {
-        c09_trace("movie: no manifest at %s", manifest);
-        return 0;
+        return;
     }
     while (fgets(line, sizeof(line), file)) {
         char key[64];
@@ -3662,8 +3729,7 @@ static int load_splash_dir(Engine *e, const char *subdir, int mode) {
         fps = 30;
     }
     if (frames < 1 || frames > 20000) {
-        c09_trace("movie: %s has bad frame count %d", subdir, frames);
-        return 0;
+        return;
     }
     if (width < 1 || width > 8192) {
         width = SCREEN_W;
@@ -3674,8 +3740,7 @@ static int load_splash_dir(Engine *e, const char *subdir, int mode) {
     snprintf(frame, sizeof(frame), "%s/frame_0000.jpg", e->splash_dir);
     if (!path_exists(frame)) {
         printf("class09: splash manifest present but %s is missing\n", frame);
-        c09_trace("movie: missing first frame %s", frame);
-        return 0;
+        return;
     }
     e->splash_frames = frames;
     e->splash_fps = fps;
@@ -3684,52 +3749,8 @@ static int load_splash_dir(Engine *e, const char *subdir, int mode) {
     e->splash_tex = NULL;
     e->splash_tex_index = -1;
     e->splash_start = SDL_GetTicks();
-    e->splash_skip_at = e->splash_start + 2500;
     e->splash_active = 1;
-    printf("class09: video %s: %d frames at %d fps (%dx%d)\n", subdir, frames, fps, width, height);
-    return 1;
-}
-
-static void load_splash(Engine *e) {
-    load_splash_dir(e, "videos/logosplash", 0);
-}
-
-static int load_movie(Engine *e, const char *subdir, int mode) {
-    char path[SPLASH_PATH_MAX];
-
-    if (!load_splash_dir(e, subdir, mode)) {
-        return 0;
-    }
-    if (e->audio_ok) {
-        snprintf(path, sizeof(path), "%s/audio.mp3", e->splash_dir);
-        e->intro_music = Mix_LoadMUS(path);
-        if (e->intro_music) {
-            e->splash_start = SDL_GetTicks();
-            e->splash_skip_at = e->splash_start + 2500;
-            Mix_PlayMusic(e->intro_music, 0);
-            Mix_VolumeMusic(e->opt_music * MIX_MAX_VOLUME / 10);
-            c09_trace("movie: audio started (%s)", subdir);
-        } else {
-            c09_trace("movie: audio missing (%s, %s)", path, Mix_GetError());
-        }
-    }
-    c09_trace("movie: playing %s, %d frames", subdir, e->splash_frames);
-    return 1;
-}
-
-static int load_intro(Engine *e) {
-    return load_movie(e, "videos/opening", 1);
-}
-
-static void stop_intro_audio(Engine *e) {
-    if (!e->intro_music) {
-        return;
-    }
-    if (e->audio_ok) {
-        Mix_HaltMusic();
-    }
-    Mix_FreeMusic(e->intro_music);
-    e->intro_music = NULL;
+    printf("class09: startup video: %d frames at %d fps (%dx%d)\n", frames, fps, width, height);
 }
 
 static void finish_splash(Engine *e) {
@@ -3742,19 +3763,7 @@ static void finish_splash(Engine *e) {
         e->splash_tex = NULL;
     }
     e->splash_tex_index = -1;
-    if (e->splash_mode == 2) {
-        c09_trace("ending video: ended after %u ms", (unsigned)(SDL_GetTicks() - e->splash_start));
-        stop_intro_audio(e);
-        e->splash_mode = 0;
-        /* The video is over; show the ending text card next. */
-        e->ending_active = 1;
-        e->waiting = 1;
-        e->wait_auto = 0;
-        e->wait_kind = WAIT_ENDING;
-    } else if (e->splash_mode == 1) {
-        stop_intro_audio(e);
-        e->splash_mode = 0;
-    } else if (e->gui_menu_music[0]) {
+    if (e->gui_menu_music[0]) {
         play_chunk(e, "music", e->gui_menu_music, 0, 1);
     }
 }
@@ -3786,8 +3795,7 @@ static void draw_splash(Engine *e) {
             e->splash_tex = SDL_CreateTextureFromSurface(e->renderer, surface);
             SDL_FreeSurface(surface);
             if (e->splash_tex) {
-                SDL_SetTextureBlendMode(e->splash_tex,
-                                        e->splash_mode ? SDL_BLENDMODE_NONE : SDL_BLENDMODE_BLEND);
+                SDL_SetTextureBlendMode(e->splash_tex, SDL_BLENDMODE_BLEND);
             }
         } else {
             printf("class09: splash frame load failed: %s (%s)\n", path, IMG_GetError());
@@ -3832,6 +3840,7 @@ int engine_frame(Engine *e) {
     if (!e->running) {
         return 0;
     }
+    update_video(e);
 
     if (e->splash_active) {
         Uint32 elapsed = SDL_GetTicks() - e->splash_start;
@@ -3841,7 +3850,7 @@ int engine_frame(Engine *e) {
         }
     }
 
-    if (e->mode == MODE_GAME && !e->splash_active) {
+    if (e->mode == MODE_GAME) {
         update_waits(e);
         run_ops(e);
     }
@@ -3863,7 +3872,6 @@ int engine_frame(Engine *e) {
         switch (e->mode) {
         case MODE_MENU:
             draw_main_menu(e);
-            draw_new_message(e);
             break;
         case MODE_GAME:
             draw_world(e);
@@ -3888,9 +3896,8 @@ int engine_frame(Engine *e) {
             draw_main_menu(e);
             draw_about(e);
             break;
-        case MODE_ENDINGS:
-            fill_rect(e, 0, 0, SCREEN_W, SCREEN_H, 0x000000, 255);
-            draw_endings(e);
+        case MODE_TRACKER:
+            draw_tracker(e);
             break;
         default:
             break;
@@ -3898,6 +3905,9 @@ int engine_frame(Engine *e) {
     }
 
     draw_toast(e);
+    if (e->video_active && e->video_mode != 3) {
+        draw_video(e);
+    }
     reset_texture_refs(e);
     if (e->capture_at && time_reached(e->capture_at)) {
         e->capture_at = 0;

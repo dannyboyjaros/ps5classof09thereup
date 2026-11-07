@@ -118,10 +118,14 @@ def main():
         src = os.path.join(vids, name)
         if not os.path.isfile(src):
             continue
-        if name.endswith(".pkv"):
-            shutil.copy2(src, os.path.join(packs_out, name))
-        elif name.endswith(".mp3"):
+        if name.endswith(".mp3"):
             shutil.copy2(src, os.path.join(ASSETS, "videos", name))
+    packs_src = os.path.join(vids, "packs")
+    if os.path.isdir(packs_src):
+        for name in os.listdir(packs_src):
+            src = os.path.join(packs_src, name)
+            if os.path.isfile(src) and name.endswith(".pkv"):
+                shutil.copy2(src, os.path.join(packs_out, name))
 
     with open(os.path.join(os.path.dirname(ASSETS), "GAME_FILES.txt"), "w", encoding="utf-8") as f:
         for rel in copied:
