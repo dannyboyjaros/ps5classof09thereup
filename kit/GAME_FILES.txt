@@ -1,0 +1,691 @@
+FUTURA.TTF
+HELVETICA_EXTRA_COMPRESSED.TTF
+HELVETICA_LT_NARROW.TTF
+audio/Ambience/Alley_Ambience.mp3
+audio/Ambience/Bar_Ambience.mp3
+audio/Ambience/Bar_NoMusic_Ambience.mp3
+audio/Ambience/Barcade_Ambience.mp3
+audio/Ambience/Barcade_NoMusic_Ambience.mp3
+audio/Ambience/Bathroom_Lockerroom_Ambience.mp3
+audio/Ambience/Breakroom_Ambience.mp3
+audio/Ambience/Cafeteria_Ambience.mp3
+audio/Ambience/Classroom_Ambience.mp3
+audio/Ambience/Classroom_Ambience_2.mp3
+audio/Ambience/Courtroom_Ambience.mp3
+audio/Ambience/Darkroom_Ambience.mp3
+audio/Ambience/Diner_Ambience.mp3
+audio/Ambience/Doorstep_Ambience.mp3
+audio/Ambience/Exterior_Ambience.mp3
+audio/Ambience/Fye_Ambience.mp3
+audio/Ambience/Fye_NoMusic_Ambience.mp3
+audio/Ambience/Gym_Ambience.mp3
+audio/Ambience/Gym_Ceremony_Ambience.mp3
+audio/Ambience/Hallway_Ambience.mp3
+audio/Ambience/HardwareStore_Ambience.mp3
+audio/Ambience/Hood_Ambience.mp3
+audio/Ambience/HotTopic_Ambience.mp3
+audio/Ambience/House_Ambience.mp3
+audio/Ambience/House_Ambience_2.mp3
+audio/Ambience/House_Night_Ambience.mp3
+audio/Ambience/Library_Ambience.mp3
+audio/Ambience/Mall_Ambience.mp3
+audio/Ambience/Neighborhood_Ambience_Night.mp3
+audio/Ambience/Office_Ambience.mp3
+audio/Ambience/ParkingGarage_Ambience.mp3
+audio/Ambience/School_Ext_Ambience.mp3
+audio/Ambience/Venue_Ambience.mp3
+audio/Ambience/WheatField_Ambience.mp3
+audio/MainMenuPress.mp3
+audio/MainMenuRollover.mp3
+audio/NewTextAlert.mp3
+audio/PhoneSelect.mp3
+audio/Phone_button.mp3
+audio/Phone_close.mp3
+audio/Phone_slide.mp3
+audio/Scenes/0002A.mp3
+audio/Scenes/0002B.mp3
+audio/Scenes/0003.mp3
+audio/Scenes/0004.mp3
+audio/Scenes/0005.mp3
+audio/Scenes/0006.mp3
+audio/Scenes/0007.mp3
+audio/Scenes/0008.mp3
+audio/Scenes/0009.mp3
+audio/Scenes/0010.mp3
+audio/Scenes/0011.mp3
+audio/Scenes/0012.mp3
+audio/Scenes/0013.mp3
+audio/Scenes/0014.mp3
+audio/Scenes/0015.mp3
+audio/Scenes/0016.mp3
+audio/Scenes/0017.mp3
+audio/Scenes/0018.mp3
+audio/Scenes/0019.mp3
+audio/Scenes/0020.mp3
+audio/Scenes/0021.mp3
+audio/Scenes/0022.mp3
+audio/Scenes/0023.mp3
+audio/Scenes/0024.mp3
+audio/Scenes/0025.mp3
+audio/Scenes/0026.mp3
+audio/Scenes/0027.mp3
+audio/Scenes/0028.mp3
+audio/Scenes/0029.mp3
+audio/Scenes/0030.mp3
+audio/Scenes/0031.mp3
+audio/Scenes/0032.mp3
+audio/Scenes/0033.mp3
+audio/Scenes/0034.mp3
+audio/Scenes/0035.mp3
+audio/Scenes/0036.mp3
+audio/Scenes/0037.mp3
+audio/Scenes/0038.mp3
+audio/Scenes/0039.mp3
+audio/Scenes/0040.mp3
+audio/Scenes/0041.mp3
+audio/Scenes/0042.mp3
+audio/Scenes/0043.mp3
+audio/Scenes/0044.mp3
+audio/Scenes/0045.mp3
+audio/Scenes/0046.mp3
+audio/Scenes/0047.mp3
+audio/Scenes/0048.mp3
+audio/Scenes/0049.mp3
+audio/Scenes/0050.mp3
+audio/Scenes/0051.mp3
+audio/Scenes/0052.mp3
+audio/Scenes/0053.mp3
+audio/Scenes/0054.mp3
+audio/Scenes/0055.mp3
+audio/Scenes/0056.mp3
+audio/Scenes/0057.mp3
+audio/Scenes/0058.mp3
+audio/Scenes/0059.mp3
+audio/Scenes/0060.mp3
+audio/Scenes/0061.mp3
+audio/Scenes/0062.mp3
+audio/Scenes/0063.mp3
+audio/Scenes/0064.mp3
+audio/Scenes/0065.mp3
+audio/Scenes/0066.mp3
+audio/Scenes/0067.mp3
+audio/Scenes/0068.mp3
+audio/Scenes/0069.mp3
+audio/Scenes/0070.mp3
+audio/Scenes/0071.mp3
+audio/Scenes/0072.mp3
+audio/Scenes/0073.mp3
+audio/Scenes/0075.mp3
+audio/Scenes/0076.mp3
+audio/Scenes/0077.mp3
+audio/Scenes/0078.mp3
+audio/Scenes/0079.mp3
+audio/Scenes/0080.mp3
+audio/Scenes/0081.mp3
+audio/Scenes/0083.mp3
+audio/Scenes/0084.mp3
+audio/Scenes/0085.mp3
+audio/Scenes/0086.mp3
+audio/Scenes/0087.mp3
+audio/Scenes/0088.mp3
+audio/Scenes/0089.mp3
+audio/Scenes/0090.mp3
+audio/Scenes/0091.mp3
+audio/Scenes/0092.mp3
+audio/Scenes/0093.mp3
+audio/Scenes/0094.mp3
+audio/Scenes/0096.mp3
+audio/Scenes/0097.mp3
+audio/Scenes/0098.mp3
+audio/Scenes/0099.mp3
+audio/Scenes/0100.mp3
+audio/Scenes/0101.mp3
+audio/Scenes/0102.mp3
+audio/Scenes/0103.mp3
+audio/Scenes/0104.mp3
+audio/Scenes/0105.mp3
+audio/Scenes/0106.mp3
+audio/Scenes/0107.mp3
+audio/Scenes/0108.mp3
+audio/Scenes/0109.mp3
+audio/Scenes/0110.mp3
+audio/Scenes/0111.mp3
+audio/Scenes/0112.mp3
+audio/Scenes/0114.mp3
+audio/Scenes/0115.mp3
+audio/Scenes/0116.mp3
+audio/Scenes/0117.mp3
+audio/Scenes/0118.mp3
+audio/Scenes/0119.mp3
+audio/Scenes/0120.mp3
+audio/Scenes/0121.mp3
+audio/Scenes/0122.mp3
+audio/Scenes/0123.mp3
+audio/Scenes/0124.mp3
+audio/Scenes/0125.mp3
+audio/Scenes/0126.mp3
+audio/Scenes/0127.mp3
+audio/Scenes/0128.mp3
+audio/Scenes/0129.mp3
+audio/Scenes/0130.mp3
+audio/Scenes/0132.mp3
+audio/Scenes/0133.mp3
+audio/Scenes/0134.mp3
+audio/Scenes/0135.mp3
+audio/Scenes/0136.mp3
+audio/Scenes/0137.mp3
+audio/Scenes/0138.mp3
+audio/Scenes/0139.mp3
+audio/Scenes/0140.mp3
+audio/Scenes/0142.mp3
+audio/Scenes/0143.mp3
+audio/Scenes/0144.mp3
+audio/Scenes/0145.mp3
+audio/Scenes/0146.mp3
+audio/Scenes/0147.mp3
+audio/Scenes/0148.mp3
+audio/Scenes/0149.mp3
+audio/Scenes/0150.mp3
+audio/Scenes/0151.mp3
+audio/Scenes/0152.mp3
+audio/Scenes/0153.mp3
+audio/Scenes/0154.mp3
+audio/Scenes/0155.mp3
+audio/Scenes/0156.mp3
+audio/Scenes/0157.mp3
+audio/Scenes/0158.mp3
+audio/Scenes/0159.mp3
+audio/menu_piano.mp3
+gui/ClassOf09logo.png
+gui/back_pills_vert.png
+gui/button/check_foreground.png
+gui/button/check_selected_foreground.png
+gui/button/choice_hover_background.png
+gui/button/choice_idle_background.png
+gui/button/hover_background.png
+gui/button/idle_background.png
+gui/button/quick_hover_background.png
+gui/button/quick_idle_background.png
+gui/button/radio_foreground.png
+gui/button/radio_selected_foreground.png
+gui/button/slot_hover_background.png
+gui/button/slot_idle_background.png
+gui/choice_window.png
+gui/ending_tracker/MOCKUP_4.jpg
+gui/ending_tracker/base_screen.png
+gui/ending_tracker/confirm_bubble.png
+gui/ending_tracker/ending_tracker_pda.png
+gui/ending_tracker/faceplate.png
+gui/ending_tracker/highlight_bar.png
+gui/ending_tracker/screen_overlay.png
+gui/ending_tracker/text_access.png
+gui/ending_tracker/texting_back.png
+gui/ending_tracker/texting_frombar.png
+gui/ending_tracker/texting_scrollbar.png
+gui/main_menu.png
+gui/menu 2/BG living.webm
+gui/menu 2/about2.png
+gui/menu 2/about2_mask.png
+gui/menu 2/about2_ro.png
+gui/menu 2/continue2.png
+gui/menu 2/continue2_mask.png
+gui/menu 2/continue2_ro.png
+gui/menu 2/exit2.png
+gui/menu 2/exit2_mask.png
+gui/menu 2/exit2_ro.png
+gui/menu 2/hover_bar.png
+gui/menu 2/menu_backtray.png
+gui/menu 2/menu_bg.png
+gui/menu 2/newgame2.png
+gui/menu 2/newgame2_mask.png
+gui/menu 2/newgame2_ro.png
+gui/menu 2/options2.png
+gui/menu 2/options2_mask.png
+gui/menu 2/options2_ro.png
+gui/menu 2/robar.png
+gui/namebox.png
+gui/nvl.png
+gui/pause_phone.png
+gui/textbox.png
+handwriting2.ttf
+images/Cafeteria int 2.jpg
+images/Cafeteria int.jpg
+images/ames 1 angry.png
+images/ames 1 smile.png
+images/ames 1 smug.png
+images/ames 1.png
+images/ames 2 angry.png
+images/ames 2 sad.png
+images/ames 2 smile.png
+images/ames 2 smug.png
+images/ames 2.png
+images/ames 3.png
+images/ari pj angry.png
+images/ari pj blush.png
+images/ari pj sad.png
+images/ari pj.png
+images/ari sc1 angry.png
+images/ari sc1 sad.png
+images/ari sc1.png
+images/ari sc2 angry.png
+images/ari sc2 blush.png
+images/ari sc2 sad.png
+images/ari sc2 shy.png
+images/ari sc2 smile.png
+images/ari sc2 think.png
+images/ari sc2.png
+images/ari sc3 angry.png
+images/ari sc3 sad.png
+images/ari sc3 shy.png
+images/ari sc3 smile.png
+images/ari sc3 think.png
+images/ari sc3.png
+images/ari sc4 angry.png
+images/ari sc4 sad.png
+images/ari sc4 shy.png
+images/ari sc4 smile.png
+images/ari sc4 think.png
+images/ari sc4.png
+images/ari sc5 angry.png
+images/ari sc5 sad.png
+images/ari sc5 shy.png
+images/ari sc5 smile.png
+images/ari sc5 think.png
+images/ari sc5.png
+images/ari sc6 angry.png
+images/ari sc6 sad.png
+images/ari sc6 shy.png
+images/ari sc6 think.png
+images/ari sc6.png
+images/barcade ext.jpg
+images/barcade int.jpg
+images/bathroom.jpg
+images/bedroom nicole.jpg
+images/blue.jpg
+images/bookstore ext.jpg
+images/bookstore.jpg
+images/braxton sc1.png
+images/braxton sc2 smile.png
+images/braxton sc2.png
+images/breakroom.jpg
+images/brick.png
+images/burleday 1 angry.png
+images/burleday 1 sad.png
+images/burleday 1 smile.png
+images/burleday 1.png
+images/burleday 2.png
+images/car_camry.png
+images/car_civic.png
+images/car_corolla.png
+images/car_lincoln.png
+images/car_mustang.png
+images/classroom int 2.jpg
+images/classroom int 3.jpg
+images/classroom int 4.jpg
+images/classroom int 5.jpg
+images/coach 1 angry.png
+images/coach 1 sad.png
+images/coach 1 smile.png
+images/coach 1 worried.png
+images/coach 1.png
+images/coach 2 angry.png
+images/coach 2 smile.png
+images/coach 2.png
+images/coffeeext.jpg
+images/cop.png
+images/counselor 1 angry.png
+images/counselor 1 smile.png
+images/counselor 1.png
+images/counselor 2 smile.png
+images/counselor 2.png
+images/counselor 3 smile.png
+images/counselor 3.png
+images/crispin sc1 smile.png
+images/crispin sc1.png
+images/crispin sc2 smile.png
+images/crispin sc2.png
+images/crispin sc3 smile.png
+images/crispin sc3.png
+images/crispin sc4 smile.png
+images/crispin sc4.png
+images/crt_myspace.png
+images/cut0024_1.png
+images/cut0024_2.png
+images/cut0024_3.png
+images/cut0024_4.png
+images/cut0024_5.png
+images/cut0024_6.png
+images/cut0042_1.png
+images/cut0042_2.png
+images/cut0042_3.png
+images/cut0042_4.png
+images/cut0042_5.png
+images/cut0042_6.png
+images/cut0042_7.png
+images/cut0058.png
+images/cut0088.png
+images/cut0088a 1.png
+images/cut0088a 2.png
+images/cut0088a 3.png
+images/cut0088a 4.png
+images/cut0088a 5.png
+images/cut0093 a.png
+images/cut0093 b.png
+images/cut0133.png
+images/dark room.jpg
+images/darkalley.png
+images/diner ext.jpg
+images/diner int.jpg
+images/drawing_jecka.png
+images/drawing_nicole.png
+images/emily pj angry.png
+images/emily pj sad.png
+images/emily pj smile.png
+images/emily pj yell.png
+images/emily pj.png
+images/emily sc1 angry.png
+images/emily sc1 smile.png
+images/emily sc1 upset.png
+images/emily sc1 yell.png
+images/emily sc1.png
+images/emily sc2 angry.png
+images/emily sc2 smile.png
+images/emily sc2 upset.png
+images/emily sc2.png
+images/emily sc3 angry.png
+images/emily sc3 sad.png
+images/emily sc3 smile.png
+images/emily sc3 upset.png
+images/emily sc3.png
+images/emily sc4 angry.png
+images/emily sc4 sad.png
+images/emily sc4 smile.png
+images/emily sc4 upset.png
+images/emily sc4 yell.png
+images/emily sc4.png
+images/emily sc5 angry.png
+images/emily sc5 sad.png
+images/emily sc5 smile.png
+images/emily sc5 upset.png
+images/emily sc5.png
+images/emt.png
+images/flash.png
+images/fye.jpg
+images/gamer_brother smile.png
+images/gamer_brother.png
+images/gym 2.jpg
+images/hardwarestore.png
+images/home nicole ext day.jpg
+images/home nicole ext night.jpg
+images/home nicole int.jpg
+images/hood.png
+images/hot topic.jpg
+images/house ari night.png
+images/house jecka night.png
+images/hunter romeo smile.png
+images/hunter sc1 blush.png
+images/hunter sc1 sad.png
+images/hunter sc1 smile.png
+images/hunter sc1.png
+images/hunter sc2 blush.png
+images/hunter sc2 sad.png
+images/hunter sc2.png
+images/hunter sc3 blush.png
+images/hunter sc3 sad.png
+images/hunter sc3 smile.png
+images/hunter sc3.png
+images/jail int.jpg
+images/jecka changing angry.png
+images/jecka changing sad.png
+images/jecka changing.png
+images/jecka pj angry.png
+images/jecka pj sad.png
+images/jecka pj smile.png
+images/jecka pj surprised.png
+images/jecka pj.png
+images/jecka sc1 angry.png
+images/jecka sc1 camera.png
+images/jecka sc1 flirt.png
+images/jecka sc1 smile.png
+images/jecka sc1 smoke.png
+images/jecka sc1 surprised.png
+images/jecka sc1 worried.png
+images/jecka sc1.png
+images/jecka sc2 angry.png
+images/jecka sc2 flirt.png
+images/jecka sc2 smile.png
+images/jecka sc2 surprised.png
+images/jecka sc2 worried.png
+images/jecka sc2.png
+images/jecka sc3 angry.png
+images/jecka sc3 smile.png
+images/jecka sc3 smoke.png
+images/jecka sc3 surprised.png
+images/jecka sc3 worried.png
+images/jecka sc3.png
+images/jecka sc4 angry.png
+images/jecka sc4 sad.png
+images/jecka sc4 smile.png
+images/jecka sc4 surprised.png
+images/jecka sc4.png
+images/jecka sc5 angry.png
+images/jecka sc5 sad.png
+images/jecka sc5 smile.png
+images/jecka sc5 surprised.png
+images/jecka sc5.png
+images/jecka sc6 angry.png
+images/jecka sc6 sad.png
+images/jecka sc6 surprised.png
+images/jecka sc6.png
+images/jeffery sc1 angry.png
+images/jeffery sc1 blush.png
+images/jeffery sc1 perv.png
+images/jeffery sc1 smile.png
+images/jeffery sc1.png
+images/jeffery sc2 angry.png
+images/jeffery sc2 blush.png
+images/jeffery sc2 smile.png
+images/jeffery sc2.png
+images/jeffery sc3 angry.png
+images/jeffery sc3 blush.png
+images/jeffery sc3 smile.png
+images/jeffery sc3.png
+images/karen sc1 angry.png
+images/karen sc1 sad.png
+images/karen sc1 smile.png
+images/karen sc1.png
+images/karen sc2 smile.png
+images/karen sc3 angry.png
+images/karen sc3 sad.png
+images/karen sc3 smile.png
+images/karen sc3.png
+images/katz 1 angry.png
+images/katz 1.png
+images/katz 2 angry.png
+images/katz 2.png
+images/kelly fye angry.png
+images/kelly fye sad.png
+images/kelly fye.png
+images/kelly sc1 angry.png
+images/kelly sc1 blush.png
+images/kelly sc1 sad.png
+images/kelly sc1.png
+images/kelly sc2 angry.png
+images/kelly sc2.png
+images/kelly sc3 angry.png
+images/kelly sc3 sad.png
+images/kelly sc3.png
+images/kylar sc1 angry.png
+images/kylar sc1 smile.png
+images/kylar sc1.png
+images/kylar sc2 angry.png
+images/kylar sc2 smile.png
+images/kylar sc2 yell.png
+images/kylar sc2.png
+images/kylar sc3 angry.png
+images/kylar sc3 sad.png
+images/kylar sc3 smile.png
+images/kylar sc3.png
+images/kylar sc4 smile.png
+images/kylar sc4.png
+images/kyle sc1 sad.png
+images/kyle sc1 smile.png
+images/kyle sc1.png
+images/laptop.png
+images/library ext.png
+images/library.png
+images/locker room.jpg
+images/lorre 1 angry.png
+images/lorre 1 smile.png
+images/lorre 1.png
+images/lorre 2 freakout.png
+images/lorre 2 surprised.png
+images/lorre 2.png
+images/lynn 1.png
+images/lynn 2.png
+images/lynn 3.png
+images/lynn 4.png
+images/mall int 2.jpg
+images/mall int.jpg
+images/mallcop.png
+images/megan pa.png
+images/megan sc1.png
+images/megan sc2 angry.png
+images/megan sc2 smile.png
+images/megan sc2.png
+images/megan sc3 angry.png
+images/megan sc3 smile.png
+images/megan sc3.png
+images/megan sc4 angry.png
+images/megan sc4 laugh.png
+images/megan sc4 smile.png
+images/megan sc4.png
+images/mom 1 angry.png
+images/mom 1 pain.png
+images/mom 1 smile.png
+images/mom 1 upset.png
+images/mom 1.png
+images/mom 2 angry.png
+images/mom 2 sad.png
+images/mom 2 upset.png
+images/mom 2.png
+images/mom deli angry.png
+images/mom deli smile.png
+images/mom deli upset.png
+images/mom deli.png
+images/nicole bape angry.png
+images/nicole bape sad.png
+images/nicole bape smile.png
+images/nicole bape surprised.png
+images/nicole bape yell.png
+images/nicole bape.png
+images/nicole carwash angry.png
+images/nicole carwash flirt.png
+images/nicole carwash sad.png
+images/nicole carwash smile.png
+images/nicole carwash surprised.png
+images/nicole carwash.png
+images/nicole fye angry.png
+images/nicole fye sad.png
+images/nicole fye smile.png
+images/nicole fye surprised.png
+images/nicole fye.png
+images/nicole jail angry.png
+images/nicole jail sad.png
+images/nicole jail surprised.png
+images/nicole jail yell.png
+images/nicole jail.png
+images/nicole juliet flirt.png
+images/nicole juliet smile.png
+images/nicole juliet.png
+images/nicole pj angry.png
+images/nicole pj sad.png
+images/nicole pj smile.png
+images/nicole pj surprised.png
+images/nicole pj.png
+images/nicole sc1 angry.png
+images/nicole sc1 flirt.png
+images/nicole sc1 sad.png
+images/nicole sc1 smile.png
+images/nicole sc1 smoke.png
+images/nicole sc1 surprised.png
+images/nicole sc1.png
+images/nicole sc2 angry.png
+images/nicole sc2 flirt.png
+images/nicole sc2 sad.png
+images/nicole sc2 smile.png
+images/nicole sc2 surprised.png
+images/nicole sc2.png
+images/nicole sc3 angry.png
+images/nicole sc3 flirt.png
+images/nicole sc3 sad.png
+images/nicole sc3 smile.png
+images/nicole sc3 surprised.png
+images/nicole sc3 yell.png
+images/nicole sc3.png
+images/nicole sc4 angry.png
+images/nicole sc4 flirt.png
+images/nicole sc4 sad.png
+images/nicole sc4 smile.png
+images/nicole sc4 surprised.png
+images/nicole sc4 yell.png
+images/nicole sc4.png
+images/nicole sc5 angry.png
+images/nicole sc5 sad.png
+images/nicole sc5 smile.png
+images/nicole sc5 surprised.png
+images/nicole sc5 yell.png
+images/nicole sc5.png
+images/nicole sc6 angry.png
+images/nicole sc6 flirt.png
+images/nicole sc6 sad.png
+images/nicole sc6 smile.png
+images/nicole sc6 surprised.png
+images/nicole sc6.png
+images/nicole sc7 angry.png
+images/nicole sc7 sad.png
+images/nicole sc7 smile.png
+images/nicole sc7 surprised.png
+images/nicole sc7.png
+images/office 1.jpg
+images/office 2.jpg
+images/parkinglot.png
+images/photo classroom.jpg
+images/pizza.png
+images/porch_ari.png
+images/porch_jecka.png
+images/red.jpg
+images/ring_woodburn.png
+images/school courtyard.jpg
+images/school ext 1.jpg
+images/school ext 2.jpg
+images/school ext 3.jpg
+images/school ext 4.jpg
+images/school ext 5.jpg
+images/school ext 6.jpg
+images/school front.jpg
+images/school int 1.jpg
+images/school int 2.jpg
+images/sext.png
+images/text_stillthere.png
+images/theatre 1.jpg
+images/theatre 2b.jpg
+images/theatre backstage.jpg
+images/title_9am.png
+images/title_dayslater.png
+images/title_onedaylater.png
+images/title_onemonthlater.png
+images/title_oneweeklater.png
+images/title_september2008.png
+images/title_twoweekslater.png
+images/trody ht angry.png
+images/trody ht smile.png
+images/trody ht.png
+images/trody sc1.png
+images/white.png
+joystix monospace.ttf
+laptopsearch/laptopscreen.png
+laptopsearch/laptopscreenoverlay.png
+laptopsearch/laptopsearchrollover.png
+laptopsearch/laptopshell.png
+texting2007.ttf
