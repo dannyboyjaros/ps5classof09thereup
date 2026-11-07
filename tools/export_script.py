@@ -624,6 +624,10 @@ class Assembler(object):
         source = self.image_defs.get(tuple(parts))
         flip = False
 
+        # The Re-Up's looping smoke overlay: 120 numbered PNG frames.
+        if label.strip().lower() == "smoke":
+            return ("anim", "smokeloop/Comp 1_00001.png", "smoke", False, True)
+
         if source:
             match = MOVIE_RE.search(source)
             if match:
@@ -1376,6 +1380,15 @@ def main():
     assembler = Assembler(game_dir, files, index, image_defs, transforms, characters, endings)
     payload = assembler.assemble(statements)
     payload["gui"] = build_gui(index)
+
+    animations = {}
+    smoke_dir = os.path.join(game_dir, "smokeloop")
+    if os.path.isdir(smoke_dir):
+        smoke = sorted("smokeloop/" + name for name in os.listdir(smoke_dir)
+                       if name.lower().endswith(".png"))
+        if smoke:
+            animations["smoke"] = {"frames": smoke, "delay_ms": 80}
+    payload["animations"] = animations
     compact_ops(payload)
 
     # Report jump targets that do not exist.

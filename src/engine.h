@@ -123,6 +123,7 @@ typedef struct {
     JsonValue *labels;
     JsonValue *gui;
     JsonValue *endings;
+    JsonValue *animations;
 
     int pc;
     int call_stack[CALL_STACK];

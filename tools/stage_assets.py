@@ -91,6 +91,10 @@ def main():
         for name in names:
             rel = os.path.relpath(os.path.join(root, name), GAME).replace("\\", "/")
             wanted.add(rel)
+    for root, _dirs, names in os.walk(os.path.join(GAME, "smokeloop")):
+        for name in names:
+            rel = os.path.relpath(os.path.join(root, name), GAME).replace("\\", "/")
+            wanted.add(rel)
 
     if os.path.isdir(ASSETS):
         shutil.rmtree(ASSETS)

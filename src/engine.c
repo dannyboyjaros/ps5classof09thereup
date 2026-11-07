@@ -1684,6 +1684,9 @@ static void set_item(Engine *e, const char *rel, const char *tag, const char *la
     item->order = order ? order : ++e->next_order;
     item->anim_count = 0;
     item->anim_paused = 0;
+    if (kind && strcmp(kind, "anim") == 0) {
+        item->anim_start = SDL_GetTicks();
+    }
     if (frames && frames->type == JL_ARRAY && frames->u.array.count >= 2) {
         size_t total = frames->u.array.count;
         for (i = 0; i < (int)total && item->anim_count < MAX_ANIM; i++) {
@@ -2785,6 +2788,16 @@ static void draw_item(Engine *e, LayerItem *item) {
             sscanf(item->arg, "%d , %d , %d , %d", &r, &g, &b, &a);
         }
         fill_rect(e, x, y, w, h, (Uint32)((r & 0xFF) << 16 | (g & 0xFF) << 8 | (b & 0xFF)), a * alpha / 255);
+    } else if (strcmp(item->kind, "anim") == 0) {
+        JsonValue *anim = obj_get(e->animations, item->arg);
+        JsonValue *frames = anim ? obj_get(anim, "frames") : NULL;
+        int delay = anim ? obj_int(anim, "delay_ms", 80) : 80;
+        if (frames && frames->type == JL_ARRAY && frames->u.array.count > 0) {
+            Uint32 elapsed = SDL_GetTicks() - item->anim_start;
+            size_t idx = delay > 0 ? (size_t)((elapsed / (Uint32)delay) % frames->u.array.count) : 0;
+            const char *rel = json_as_string(frames->u.array.items[idx]);
+            draw_image(e, rel, x, y, w, h, alpha, flip);
+        }
     }
 }
 
@@ -3466,6 +3479,7 @@ int engine_init(Engine *e, const char *script_path, const char *game_dir) {
     e->labels = obj_get(e->root, "labels");
     e->gui = obj_get(e->root, "gui");
     e->endings = obj_get(e->root, "endings");
+    e->animations = obj_get(e->root, "animations");
     if (!e->ops || e->ops->type != JL_ARRAY || !e->labels || e->labels->type != JL_OBJECT) {
         fprintf(stderr, "class09: script file is missing ops or labels\n");
         json_free(e->root);
