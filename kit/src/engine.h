@@ -260,7 +260,10 @@ typedef struct {
     int video_active;
     int video_mode; /* 0 = movie op, 1 = movie displayable, 2 = boot */
     int video_loop;
+    int video_webm;
     char video_name[64];
+    void *webm_player;
+    int webm_tex_serial;
     unsigned char *video_pack;
     size_t video_pack_size;
     unsigned int *video_offsets;

@@ -25,8 +25,9 @@ screen, the seven-message ending tracker, and real video playback.
 - Every background, sprite, flip, and sampled ATL slide/fade, plus the
   120-frame smoke overlay
 - **All 12 videos** (opening narration, WCsplash, logosplash, 7 ending videos,
-  the secret cs0999 video, and the animated main-menu background) via 1080p
-  JPEG frame packs and MP3 audio (~1.6 GB)
+  the secret cs0999 video, and the animated main-menu background) decoded
+  directly from the game's original VP8 + Vorbis `.webm` files with libvpx and
+  libvorbis — no frame extraction and no pre-converted media
 - Cutscene dialogue: yellow Helvetica, no text box (`csbox`)
 - The laptop `search_engine_screen` with its hotspot art
 - The 7-message ending tracker (Sidekick art, message list, full text view)
@@ -38,18 +39,21 @@ screen, the seven-message ending tracker, and real video playback.
 
 - Not Ren'Py: screens, the phone/PDA quick menu, arbitrary Python, and custom
   transitions are not interpreted. Only the subset the exporter emits runs.
-- Video is stored as 1080p30 JPEG frames (~1.6 GB for all 10:25) because the
-  PS5 homebrew backend has no VP8 decoder. Use `720 8` in
-  `tools/prepare_video_packs.sh` for a smaller package (~809 MB).
-- Hardware behaviour (`/app0`, `/download0`, audio) is unverified because no
-  PS5 was available for testing; the host build is verified.
+- Video is decoded in software with libvpx (VP8) and libvorbis (audio). The PS5
+  CPU handles 1080p30 comfortably; the console build links the PS5 static
+  libraries vendored under `kit/third_party/webm/`.
+- Hardware-verified on a retail PS5 (kernel 5.50): menu, videos, dialogue,
+  choices, rollback, quick-menu art, and the ending tracker all run.
+  Audio output is wired through the console mixer but was not listened to
+  remotely.
 
-### Video packs
+### WebM playback
 
-The pack format is a 28-byte header (`C09V`, version, width, height, fps,
-frame count, reserved), a `uint32` offset per frame, then the JPEG frames.
-Audio sits beside the pack as an MP3. `IMG_LoadMemory` decodes frames from RAM
-on both backends.
+`src/webm.c` is a small Matroska demuxer for exactly what these files use:
+EBML, Segment/Info/Tracks/Cluster, SimpleBlock/Block and Xiph lacing. VP8
+frames go to libvpx; the Vorbis track is decoded once to a temporary WAV in
+`/download0/saves` for the mixer, then removed. The engine prefers the `.webm`
+files and only falls back to C09V frame packs if someone still has them.
 
 ## Build
 
@@ -66,41 +70,40 @@ pickle layout):
 
 Output: `build/script.json` (10,237 ops, 163 labels, 7 endings, 0 unsupported).
 
-### 2. Build the video packs (WSL/Linux, needs ffmpeg)
-
-```bash
-tools/prepare_video_packs.sh "/mnt/c/.../game" build/videos 1080 8
-# the animated main-menu background
-tools/pack_one.sh "/mnt/c/.../game/gui/menu 2/BG living.webm" build/videos BG_living 1080 8 30
-```
-
-### 3. Stage the assets
+### 2. Stage the assets
 
 ```bash
 python3 tools/stage_assets.py "/mnt/c/.../game" build kit/assets
 ```
 
-Writes `kit/assets/script.json`, `kit/assets/game/` (691 files, ~649 MB), the
-video packs, and `GAME_FILES.txt`.
+Writes `kit/assets/script.json`, `kit/assets/game/` (822 files, ~1.06 GB, the
+original `.webm` videos included), and `GAME_FILES.txt`. No ffmpeg step.
 
-### 4. Build the PS5 app (WSL2)
+### 3. Build the PS5 app (WSL2)
 
 ```bash
 kit/build_class09.sh
 ```
 
 Uses the starter pipeline in `kit/` (signed `eboot.bin`, clean-room
-`libc.prx`). Output: `kit/dist/PPSA09010/` and `PPSA09010.zip`.
+`libc.prx`). It links the PS5 libvpx/libvorbis/libogg static libraries from
+`kit/third_party/webm/` (BSD). Output: `kit/dist/PPSA09010/` and
+`PPSA09010.zip`.
 
-### 5. Host build (Windows, SDL2)
+### 4. Host build (SDL2)
 
-```powershell
-cmake -S . -B build -G Ninja -DSDL2_DIR=...
+The host build uses the same WebM path when libvpx/libvorbis/ogg development
+packages and pkg-config are available:
+
+```bash
+cmake -S . -B build -G Ninja -DC09_WEBM=ON
 cmake --build build
-build\class09_runtime.exe build\script.json "..\Class of 09 The Re Up\game"
+build/class09_runtime build/script.json "/path/to/Class of 09 The Re Up/game"
 ```
 
-Saves and screenshots go to `build/saves`.
+Without `-DC09_WEBM=ON` the host build still runs, using C09V frame packs if
+present (none are needed for the PS5 app). Saves and screenshots go to
+`build/saves`.
 
 ## Controls
 

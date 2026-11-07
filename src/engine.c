@@ -1,5 +1,9 @@
 #include "engine.h"
 
+#if defined(__PROSPERO__) || defined(C09FS_WEBM)
+#include "webm.h"
+#endif
+
 #include <ctype.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -1415,6 +1419,14 @@ static void video_release(Engine *e) {
     free(e->video_pack);
     e->video_pack = NULL;
     e->video_offsets = NULL;
+#if defined(__PROSPERO__) || defined(C09FS_WEBM)
+    if (e->webm_player) {
+        webm_close((WebmPlayer *)e->webm_player);
+        e->webm_player = NULL;
+    }
+    e->video_webm = 0;
+    e->webm_tex_serial = -1;
+#endif
     e->video_active = 0;
     e->video_tex_index = -1;
 }
@@ -1435,6 +1447,59 @@ static int video_start(Engine *e, const char *name, int loop, int mode) {
         return 0;
     }
     video_release(e);
+#if defined(__PROSPERO__) || defined(C09FS_WEBM)
+    {
+        /* Prefer the game's original WebM files when they are present. */
+        char webm_path[SAVE_PATH_MAX];
+        WebmPlayer *player;
+        if (strcmp(name, "BG_living") == 0) {
+            snprintf(webm_path, sizeof(webm_path), "%s/gui/menu 2/BG living.webm", e->game_dir);
+        } else {
+            snprintf(webm_path, sizeof(webm_path), "%s/%s.webm", e->game_dir, name);
+        }
+        player = webm_open(webm_path);
+        if (player && webm_has_video(player)) {
+            e->webm_player = player;
+            e->video_webm = 1;
+            e->video_w = webm_width(player);
+            e->video_h = webm_height(player);
+            e->video_fps = 30;
+            e->video_frames = (int)(webm_duration(player) * 30.0 + 0.5);
+            if (e->video_frames < 1) {
+                e->video_frames = 1;
+            }
+            e->video_mode = mode;
+            e->video_loop = loop;
+            e->video_start = SDL_GetTicks();
+            e->video_tex = NULL;
+            e->video_tex_index = -1;
+            e->webm_tex_serial = -1;
+            e->video_active = 1;
+            copy_str(e->video_name, sizeof(e->video_name), name);
+            if (webm_has_audio(player)) {
+                char wav_path[SAVE_PATH_MAX];
+                ensure_save_dir(e);
+                snprintf(wav_path, sizeof(wav_path), "%s/video_audio.wav", e->save_dir);
+                if (webm_audio_to_wav(player, wav_path)) {
+                    e->video_music = Mix_LoadMUS(wav_path);
+                    if (e->video_music) {
+                        Mix_PlayMusic(e->video_music, 1);
+                    }
+                    remove(wav_path);
+                }
+            }
+            if (mode == 0) {
+                e->waiting = 1;
+                e->wait_auto = 0;
+                e->wait_kind = WAIT_MOVIE;
+            }
+            return 1;
+        }
+        if (player) {
+            webm_close(player);
+        }
+    }
+#endif
     video_paths(e, name, pack_path, sizeof(pack_path), audio_path, sizeof(audio_path));
     data = (unsigned char *)read_file(pack_path, &len);
     if (!data || len < 32) {
@@ -1548,6 +1613,55 @@ static void draw_video(Engine *e) {
     SDL_Surface *surface;
     SDL_Rect dst;
     double scale;
+#if defined(__PROSPERO__) || defined(C09FS_WEBM)
+    if (e->video_active && e->video_webm && e->webm_player) {
+        double seconds = (double)(SDL_GetTicks() - e->video_start) / 1000.0;
+        double duration = webm_duration((WebmPlayer *)e->webm_player);
+        const unsigned char *rgba = NULL;
+        int width = 0;
+        int height = 0;
+        int serial = 0;
+        if (e->video_loop && duration > 0.01) {
+            while (seconds >= duration) {
+                seconds -= duration;
+            }
+        }
+        if (webm_frame((WebmPlayer *)e->webm_player, seconds, &rgba, &width, &height, &serial) && rgba) {
+            if (serial != e->webm_tex_serial) {
+                SDL_Surface *frame = SDL_CreateRGBSurfaceWithFormat(0, width, height, 32,
+                                                                    SDL_PIXELFORMAT_ARGB8888);
+                if (frame && frame->pixels) {
+                    memcpy(frame->pixels, rgba, (size_t)width * (size_t)height * 4u);
+                    if (e->video_tex) {
+                        SDL_DestroyTexture(e->video_tex);
+                    }
+                    e->video_tex = SDL_CreateTextureFromSurface(e->renderer, frame);
+                    if (e->video_tex) {
+                        SDL_SetTextureBlendMode(e->video_tex, SDL_BLENDMODE_BLEND);
+                    }
+                    e->webm_tex_serial = serial;
+                }
+                if (frame) {
+                    SDL_FreeSurface(frame);
+                }
+            }
+        }
+        if (!e->video_tex) {
+            return;
+        }
+        scale = (double)SCREEN_W / (double)(e->video_w > 0 ? e->video_w : SCREEN_W);
+        if ((double)(e->video_h > 0 ? e->video_h : SCREEN_H) * scale > SCREEN_H) {
+            scale = (double)SCREEN_H / (double)(e->video_h > 0 ? e->video_h : SCREEN_H);
+        }
+        dst.w = (int)((e->video_w > 0 ? e->video_w : SCREEN_W) * scale + 0.5);
+        dst.h = (int)((e->video_h > 0 ? e->video_h : SCREEN_H) * scale + 0.5);
+        dst.x = (SCREEN_W - dst.w) / 2;
+        dst.y = (SCREEN_H - dst.h) / 2;
+        SDL_SetTextureAlphaMod(e->video_tex, 255);
+        SDL_RenderCopy(e->renderer, e->video_tex, NULL, &dst);
+        return;
+    }
+#endif
     if (!e->video_active || !e->video_pack || e->video_frames <= 0) {
         return;
     }

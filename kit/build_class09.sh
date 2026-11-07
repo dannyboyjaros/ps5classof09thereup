@@ -22,7 +22,8 @@ fi
 
 exec env \
     APP_DEFINITIONS=__PROSPERO__ \
-    APP_INCLUDE_PATHS='src/sdl src' \
+    APP_INCLUDE_PATHS='src/sdl src third_party/webm/include' \
+    APP_STATIC_ARCHIVES='third_party/webm/lib/libvpx.a third_party/webm/lib/libvorbis.a third_party/webm/lib/libogg.a' \
     APP_ASSETS=assets \
     APP_ROOT_FILES='GAME_FILES.txt README-PS5.txt' \
     USE_CCACHE=1 \

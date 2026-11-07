@@ -31,7 +31,19 @@ list(APPEND CLASS09_LIBS
     SDL2_mixer::SDL2_mixer
     SDL2_ttf::SDL2_ttf)
 
+option(C09_WEBM "Build the host runtime with libvpx/libvorbis WebM playback" OFF)
+
 target_link_libraries(class09_runtime PRIVATE ${CLASS09_LIBS})
+
+if(C09_WEBM)
+    find_package(PkgConfig REQUIRED)
+    pkg_check_modules(VPX REQUIRED IMPORTED_TARGET vpx)
+    pkg_check_modules(VORBIS REQUIRED IMPORTED_TARGET vorbis)
+    pkg_check_modules(OGG REQUIRED IMPORTED_TARGET ogg)
+    target_sources(class09_runtime PRIVATE src/webm.c src/webm.h)
+    target_compile_definitions(class09_runtime PRIVATE C09FS_WEBM=1)
+    target_link_libraries(class09_runtime PRIVATE PkgConfig::VPX PkgConfig::VORBIS PkgConfig::OGG)
+endif()
 
 if(MSVC)
     target_compile_options(class09_runtime PRIVATE /W3)

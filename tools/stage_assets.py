@@ -95,6 +95,11 @@ def main():
         for name in names:
             rel = os.path.relpath(os.path.join(root, name), GAME).replace("\\", "/")
             wanted.add(rel)
+    # The game's original VP8/Vorbis videos, decoded at runtime.
+    for name in os.listdir(GAME):
+        if name.lower().endswith(".webm"):
+            wanted.add(name)
+    wanted.add("gui/menu 2/BG living.webm")
 
     if os.path.isdir(ASSETS):
         shutil.rmtree(ASSETS)
@@ -113,23 +118,8 @@ def main():
         shutil.copy2(src, dst)
         copied.append(rel)
 
-    # Bytecode + video packs.
+    # Bytecode only: the videos are the game's own .webm files, staged above.
     shutil.copy2(os.path.join(BUILD, "script.json"), os.path.join(ASSETS, "script.json"))
-    vids = os.path.join(BUILD, "videos")
-    packs_out = os.path.join(ASSETS, "videos", "packs")
-    os.makedirs(packs_out, exist_ok=True)
-    for name in os.listdir(vids):
-        src = os.path.join(vids, name)
-        if not os.path.isfile(src):
-            continue
-        if name.endswith(".mp3"):
-            shutil.copy2(src, os.path.join(ASSETS, "videos", name))
-    packs_src = os.path.join(vids, "packs")
-    if os.path.isdir(packs_src):
-        for name in os.listdir(packs_src):
-            src = os.path.join(packs_src, name)
-            if os.path.isfile(src) and name.endswith(".pkv"):
-                shutil.copy2(src, os.path.join(packs_out, name))
 
     with open(os.path.join(os.path.dirname(ASSETS), "GAME_FILES.txt"), "w", encoding="utf-8") as f:
         for rel in copied:

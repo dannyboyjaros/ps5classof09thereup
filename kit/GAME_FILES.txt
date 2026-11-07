@@ -1,6 +1,7 @@
 FUTURA.TTF
 HELVETICA_EXTRA_COMPRESSED.TTF
 HELVETICA_LT_NARROW.TTF
+WCsplash.webm
 audio/Ambience/Alley_Ambience.mp3
 audio/Ambience/Bar_Ambience.mp3
 audio/Ambience/Bar_NoMusic_Ambience.mp3
@@ -196,6 +197,14 @@ audio/Scenes/0157.mp3
 audio/Scenes/0158.mp3
 audio/Scenes/0159.mp3
 audio/menu_piano.mp3
+cs0074.webm
+cs0082.webm
+cs0095.webm
+cs0113.webm
+cs0131.webm
+cs0141.webm
+cs0160.webm
+cs0999.webm
 gui/ClassOf09logo.png
 gui/back_pills_vert.png
 gui/button/check_foreground.png
@@ -688,6 +697,8 @@ laptopsearch/laptopscreen.png
 laptopsearch/laptopscreenoverlay.png
 laptopsearch/laptopsearchrollover.png
 laptopsearch/laptopshell.png
+logosplash.webm
+opening.webm
 smokeloop/Comp 1_00001.png
 smokeloop/Comp 1_00003.png
 smokeloop/Comp 1_00005.png
