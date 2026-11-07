@@ -1113,6 +1113,7 @@ static int split_fields(char *line, char **fields, int max_fields) {
 }
 
 static void clear_items(Engine *e);
+static void history_reset(Engine *e);
 
 static int load_game(Engine *e, int slot) {
     char path[SAVE_PATH_MAX];
@@ -1132,6 +1133,7 @@ static int load_game(Engine *e, int slot) {
     stop_channel(e, "ambient", 0);
     stop_channel(e, "music", 0);
     clear_items(e);
+    history_reset(e);
     e->choice_count = 0;
     e->choice_index = 0;
     e->waiting = 0;
@@ -1597,6 +1599,58 @@ static void draw_video(Engine *e) {
 }
 
 /* ------------------------------------------------------------------------- */
+/* dialogue history (Circle steps back)                                      */
+/* ------------------------------------------------------------------------- */
+
+static void history_reset(Engine *e) {
+    e->history_pos = 0;
+}
+
+static void history_push(Engine *e, int pc) {
+    HistoryEntry *entry;
+    if (e->history_pos > 0 && e->history[e->history_pos - 1].pc == pc) {
+        return; /* re-executed after a rollback: keep the older entries */
+    }
+    if (e->history_pos >= HISTORY_MAX) {
+        memmove(&e->history[0], &e->history[1], sizeof(HistoryEntry) * (HISTORY_MAX - 1));
+        e->history_pos = HISTORY_MAX - 1;
+    }
+    entry = &e->history[e->history_pos++];
+    entry->pc = pc;
+    entry->hud = e->hud;
+    entry->next_order = e->next_order;
+    entry->item_count = e->item_count;
+    entry->ending_active = e->ending_active;
+    memcpy(entry->items, e->items, sizeof(e->items));
+}
+
+static int history_back(Engine *e) {
+    HistoryEntry *entry;
+    if (e->history_pos <= 1) {
+        return 0;
+    }
+    e->history_pos--;
+    entry = &e->history[e->history_pos - 1];
+    e->pc = entry->pc;
+    e->hud = entry->hud;
+    e->next_order = entry->next_order;
+    e->item_count = entry->item_count;
+    e->ending_active = entry->ending_active;
+    memcpy(e->items, entry->items, sizeof(e->items));
+    e->waiting = 0;
+    e->wait_auto = 0;
+    e->wait_deadline = 0;
+    e->wait_kind = WAIT_NONE;
+    e->choice_count = 0;
+    e->choice_index = 0;
+    e->line_shown = 0;
+    e->line[0] = 0;
+    e->speaker[0] = 0;
+    stop_voice(e);
+    return 1;
+}
+
+/* ------------------------------------------------------------------------- */
 /* staging helpers                                                           */
 /* ------------------------------------------------------------------------- */
 
@@ -1802,6 +1856,7 @@ static void enter_main_menu(Engine *e) {
     stop_channel(e, "ambient", 0);
     stop_channel(e, "music", 0);
     clear_items(e);
+    history_reset(e);
     e->choice_count = 0;
     e->choice_index = 0;
     e->waiting = 0;
@@ -1833,6 +1888,7 @@ static void start_game(Engine *e) {
     stop_channel(e, "ambient", 0);
     stop_channel(e, "music", 0);
     clear_items(e);
+    history_reset(e);
     e->choice_count = 0;
     e->choice_index = 0;
     e->waiting = 0;
@@ -1957,6 +2013,7 @@ static void execute_op(Engine *e) {
         double start = op_num(op, 3);
         double end = op_num(op, 4);
         double duration = (end > start && end > 0.0) ? end - start : 0.0;
+        history_push(e, e->pc);
         e->pc++;
         copy_str(e->speaker, sizeof(e->speaker), op_str(op, 1));
         copy_str(e->line, sizeof(e->line), op_str(op, 2));
@@ -2382,8 +2439,8 @@ static void on_confirm(Engine *e) {
 
 static void on_back(Engine *e) {
     if (e->mode == MODE_GAME) {
-        if (!e->ending_active) {
-            enter_pause(e);
+        if (!e->ending_active && e->wait_kind != WAIT_MENU) {
+            history_back(e);
         }
     } else if (e->mode == MODE_PAUSE) {
         resume_game(e);
@@ -2908,6 +2965,27 @@ static void draw_laptop(Engine *e) {
     draw_text(e, FONT_SMALL, "Cross / Enter: search the web", 0xFFFFFF, 0, x + 40, y + h - 50, 0, 0);
 }
 
+static void draw_quick_menu(Engine *e) {
+    int w = 0;
+    int h = 0;
+    if (!e->hud) {
+        return;
+    }
+    /* The game's quick menu: back pills bottom-left, phone bottom-right. */
+    if (get_texture(e, "gui/back_pills_vert.png", &w, &h)) {
+        int x = (int)(0.086 * (double)(SCREEN_W - w));
+        int y = (int)(0.995 * (double)(SCREEN_H - h));
+        draw_image(e, "gui/back_pills_vert.png", x, y, w, h, 255, 0);
+    }
+    w = 0;
+    h = 0;
+    if (get_texture(e, "gui/pause_phone.png", &w, &h)) {
+        int x = (int)(0.964 * (double)(SCREEN_W - w));
+        int y = (int)(0.979 * (double)(SCREEN_H - h));
+        draw_image(e, "gui/pause_phone.png", x, y, w, h, 255, 0);
+    }
+}
+
 static void draw_world(Engine *e) {
     draw_layer(e, "master");
     draw_layer(e, "screens");
@@ -2921,9 +2999,11 @@ static void draw_world(Engine *e) {
     }
     if (e->mode == MODE_GAME && e->wait_kind == WAIT_MENU && e->choice_count > 0) {
         draw_choices(e);
+        draw_quick_menu(e);
         return;
     }
     draw_dialogue(e);
+    draw_quick_menu(e);
 }
 
 /* ------------------------------------------------------------------------- */

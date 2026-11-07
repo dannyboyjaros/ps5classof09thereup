@@ -117,6 +117,18 @@ typedef struct {
     int anim_paused;
 } LayerItem;
 
+/* One remembered line, so Circle can step back through dialogue. */
+#define HISTORY_MAX 32
+
+typedef struct {
+    int pc;
+    int hud;
+    int next_order;
+    int item_count;
+    int ending_active;
+    LayerItem items[MAX_ITEMS];
+} HistoryEntry;
+
 typedef struct {
     JsonValue *root;
     JsonValue *ops;
@@ -156,6 +168,8 @@ typedef struct {
     int item_count;
     int next_order;
     int hud;
+    HistoryEntry history[HISTORY_MAX];
+    int history_pos;
     int csbox;                 /* Re-Up cutscene dialogue: yellow, no text box */
     int laptop_active;         /* call screen search_engine_screen */
     char laptop_target[64];

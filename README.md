@@ -107,11 +107,14 @@ Saves and screenshots go to `build/saves`.
 | Action | DualSense | Keyboard |
 | --- | --- | --- |
 | Advance / confirm | Cross | Enter / Space |
-| Back, pause during a scene | Circle | Esc |
+| Step back one line | Circle | Esc |
 | Navigate | D-pad | Arrows |
-| In-game menu | Options | Tab |
-| Ending tracker (main menu) | Square | T |
+| Pause menu | Options | Tab |
+| Ending tracker (main menu) | Square | E |
 | Change an option | D-pad left/right | Left/Right |
+
+The in-game quick menu shows the game's own art: the pill-bottle back button at
+the bottom left and the phone pause button at the bottom right.
 
 ## Diagnostics
 
