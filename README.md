@@ -22,10 +22,11 @@ screen, the seven-message ending tracker, and real video playback.
 - All **163 labels** and **5,543 voiced lines** with the game's timed voice
   tracks (every line auto-advances on the voice's clock; Cross advances early)
 - **30 choice menus** with their conditions
-- Every background, sprite, flip, and sampled ATL slide/fade
+- Every background, sprite, flip, and sampled ATL slide/fade, plus the
+  120-frame smoke overlay
 - **All 12 videos** (opening narration, WCsplash, logosplash, 7 ending videos,
-  the secret cs0999 video, and the animated main-menu background) via JPEG
-  frame packs and MP3 audio
+  the secret cs0999 video, and the animated main-menu background) via 1080p
+  JPEG frame packs and MP3 audio (~1.6 GB)
 - Cutscene dialogue: yellow Helvetica, no text box (`csbox`)
 - The laptop `search_engine_screen` with its hotspot art
 - The 7-message ending tracker (Sidekick art, message list, full text view)
@@ -37,11 +38,9 @@ screen, the seven-message ending tracker, and real video playback.
 
 - Not Ren'Py: screens, the phone/PDA quick menu, arbitrary Python, and custom
   transitions are not interpreted. Only the subset the exporter emits runs.
-- `smoke` (a 120-frame sprite animation) is not played; that one overlay is
-  skipped.
-- Video is stored as 720p30 JPEG frames (~809 MB for all 10:25) because the
-  PS5 homebrew backend has no VP8 decoder. Use `1080 4` in
-  `tools/prepare_video_packs.sh` for maximum quality (~2.1 GB).
+- Video is stored as 1080p30 JPEG frames (~1.6 GB for all 10:25) because the
+  PS5 homebrew backend has no VP8 decoder. Use `720 8` in
+  `tools/prepare_video_packs.sh` for a smaller package (~809 MB).
 - Hardware behaviour (`/app0`, `/download0`, audio) is unverified because no
   PS5 was available for testing; the host build is verified.
 
@@ -70,9 +69,9 @@ Output: `build/script.json` (10,237 ops, 163 labels, 7 endings, 0 unsupported).
 ### 2. Build the video packs (WSL/Linux, needs ffmpeg)
 
 ```bash
-tools/prepare_video_packs.sh "/mnt/c/.../game" build/videos 720 8
+tools/prepare_video_packs.sh "/mnt/c/.../game" build/videos 1080 8
 # the animated main-menu background
-tools/pack_one.sh "/mnt/c/.../game/gui/menu 2/BG living.webm" build/videos BG_living 720 10 30
+tools/pack_one.sh "/mnt/c/.../game/gui/menu 2/BG living.webm" build/videos BG_living 1080 8 30
 ```
 
 ### 3. Stage the assets
