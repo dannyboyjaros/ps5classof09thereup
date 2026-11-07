@@ -57,9 +57,10 @@ files and only falls back to C09V frame packs if someone still has them.
 
 On the console the decoder runs on its own pthread: it decodes to the wall
 clock, converts one YUV frame per tick, and publishes it into a double buffer.
-The render thread only copies the newest published frame, so the menu and
-dialogue hold 60 fps while a 1080p video plays. The YUV→RGBA pass uses
-fixed-point tables and writes two pixels per U/V pair.
+The render thread copies the newest published frame into a single streaming
+texture (`SDL_UpdateTexture`) and blits it, so a video frame costs no
+allocations and the menu and dialogue keep 60 fps while a 1080p video plays.
+The YUV→RGBA pass uses fixed-point tables and writes two pixels per U/V pair.
 
 ## Build
 

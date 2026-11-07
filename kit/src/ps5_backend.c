@@ -675,6 +675,87 @@ SDL_Texture *SDL_CreateTextureFromSurface(SDL_Renderer *renderer, SDL_Surface *s
     return texture;
 }
 
+SDL_Texture *SDL_CreateTexture(SDL_Renderer *renderer, Uint32 format, int access, int w, int h) {
+    SDL_Texture *texture;
+    (void)renderer;
+    (void)access;
+    if (format != SDL_PIXELFORMAT_ARGB8888 || w <= 0 || h <= 0) {
+        g_error = "unsupported texture format";
+        return NULL;
+    }
+    texture = (SDL_Texture *)xcalloc(1, sizeof(SDL_Texture));
+    if (!texture) {
+        g_error = "out of memory";
+        return NULL;
+    }
+    texture->pixels = (Uint32 *)calloc((size_t)w * (size_t)h, sizeof(Uint32));
+    if (!texture->pixels) {
+        free(texture);
+        g_error = "out of memory for a texture";
+        return NULL;
+    }
+    texture->w = w;
+    texture->h = h;
+    texture->blend = SDL_BLENDMODE_BLEND;
+    texture->alpha_mod = 255;
+    texture->bbox_x = 0;
+    texture->bbox_y = 0;
+    texture->bbox_x1 = w;
+    texture->bbox_y1 = h;
+    texture->opaque = 0;
+    return texture;
+}
+
+int SDL_UpdateTexture(SDL_Texture *texture, const SDL_Rect *rect, const void *pixels, int pitch) {
+    if (!texture || !texture->pixels || !pixels || pitch <= 0) {
+        return -1;
+    }
+    if (!rect) {
+        int y;
+        for (y = 0; y < texture->h; y++) {
+            memcpy(texture->pixels + (size_t)y * (size_t)texture->w,
+                   (const Uint8 *)pixels + (size_t)y * (size_t)pitch,
+                   (size_t)texture->w * 4u);
+        }
+        texture->bbox_x = 0;
+        texture->bbox_y = 0;
+        texture->bbox_x1 = texture->w;
+        texture->bbox_y1 = texture->h;
+        texture->opaque = 1; /* video frames are fully opaque */
+        return 0;
+    } else {
+        int x0 = rect->x;
+        int y0 = rect->y;
+        int w = rect->w;
+        int h = rect->h;
+        int y;
+        if (x0 < 0) {
+            w += x0;
+            x0 = 0;
+        }
+        if (y0 < 0) {
+            h += y0;
+            y0 = 0;
+        }
+        if (x0 + w > texture->w) w = texture->w - x0;
+        if (y0 + h > texture->h) h = texture->h - y0;
+        if (w <= 0 || h <= 0) {
+            return 0;
+        }
+        for (y = 0; y < h; y++) {
+            memcpy(texture->pixels + (size_t)(y0 + y) * (size_t)texture->w + x0,
+                   (const Uint8 *)pixels + (size_t)y * (size_t)pitch + (size_t)x0 * 4u,
+                   (size_t)w * 4u);
+        }
+        texture->bbox_x = 0;
+        texture->bbox_y = 0;
+        texture->bbox_x1 = texture->w;
+        texture->bbox_y1 = texture->h;
+        texture->opaque = 0;
+        return 0;
+    }
+}
+
 void SDL_DestroyTexture(SDL_Texture *texture) {
     if (texture) {
         free(texture->pixels);

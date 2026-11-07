@@ -173,6 +173,7 @@ enum {
 
 enum { SDL_DISABLE = 0, SDL_ENABLE = 1 };
 enum { SDL_PIXELFORMAT_ARGB8888 = 0x16362004u };
+enum { SDL_TEXTUREACCESS_STATIC = 0, SDL_TEXTUREACCESS_STREAMING = 1, SDL_TEXTUREACCESS_TARGET = 2 };
 enum { SDL_HINT_RENDER_SCALE_QUALITY = 1 };
 
 /* ---- entry points used by the runtime ---- */
@@ -211,6 +212,8 @@ int SDL_BlitScaled(SDL_Surface *src, const SDL_Rect *srcrect, SDL_Surface *dst,
 int SDL_SaveBMP(SDL_Surface *surface, const char *file);
 
 SDL_Texture *SDL_CreateTextureFromSurface(SDL_Renderer *renderer, SDL_Surface *surface);
+SDL_Texture *SDL_CreateTexture(SDL_Renderer *renderer, Uint32 format, int access, int w, int h);
+int SDL_UpdateTexture(SDL_Texture *texture, const SDL_Rect *rect, const void *pixels, int pitch);
 void SDL_DestroyTexture(SDL_Texture *texture);
 int SDL_SetTextureBlendMode(SDL_Texture *texture, SDL_BlendMode blend);
 int SDL_SetTextureAlphaMod(SDL_Texture *texture, Uint8 alpha);

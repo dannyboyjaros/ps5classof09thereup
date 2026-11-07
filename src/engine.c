@@ -1475,6 +1475,8 @@ static void video_release(Engine *e) {
         SDL_DestroyTexture(e->video_tex);
         e->video_tex = NULL;
     }
+    e->video_tex_w = 0;
+    e->video_tex_h = 0;
     if (e->video_music) {
         Mix_HaltMusic();
         Mix_FreeMusic(e->video_music);
@@ -1683,6 +1685,32 @@ static SDL_Surface *video_surface(const unsigned char *data, int len) {
 #endif
 }
 
+#if defined(__PROSPERO__) || defined(C09FS_WEBM)
+static void video_upload(Engine *e, const unsigned char *src, int width, int height, int serial) {
+    if (!src || width <= 0 || height <= 0) {
+        return;
+    }
+    /* One streaming texture for the whole video: no per-frame allocation and
+     * a single copy into it. */
+    if (!e->video_tex || e->video_tex_w != width || e->video_tex_h != height) {
+        if (e->video_tex) {
+            SDL_DestroyTexture(e->video_tex);
+        }
+        e->video_tex = SDL_CreateTexture(e->renderer, SDL_PIXELFORMAT_ARGB8888,
+                                         SDL_TEXTUREACCESS_STREAMING, width, height);
+        if (e->video_tex) {
+            SDL_SetTextureBlendMode(e->video_tex, SDL_BLENDMODE_BLEND);
+        }
+        e->video_tex_w = width;
+        e->video_tex_h = height;
+    }
+    if (e->video_tex) {
+        SDL_UpdateTexture(e->video_tex, NULL, src, width * 4);
+        e->webm_tex_serial = serial;
+    }
+}
+#endif
+
 static void draw_video(Engine *e) {
     Uint32 elapsed;
     int index;
@@ -1697,8 +1725,7 @@ static void draw_video(Engine *e) {
         int width = 0;
         int height = 0;
         int serial = 0;
-        int have = 0;
-        SDL_Surface *frame = NULL;
+        const unsigned char *src = NULL;
         if (e->video_loop && duration > 0.01) {
             while (seconds >= duration) {
                 seconds -= duration;
@@ -1708,49 +1735,23 @@ static void draw_video(Engine *e) {
         if (e->video_thread_live && e->video_mutex_ready) {
             pthread_mutex_lock(&e->video_mutex);
             if (e->video_buf_serial != e->webm_tex_serial && e->video_buf_size > 0) {
+                src = e->video_buf[e->video_buf_index];
                 width = e->video_buf_w;
                 height = e->video_buf_h;
                 serial = e->video_buf_serial;
-                frame = SDL_CreateRGBSurfaceWithFormat(0, width, height, 32,
-                                                       SDL_PIXELFORMAT_ARGB8888);
-                if (frame && frame->pixels) {
-                    memcpy(frame->pixels, e->video_buf[e->video_buf_index],
-                           (size_t)width * (size_t)height * 4u);
-                }
             }
+            video_upload(e, src, width, height, serial);
             pthread_mutex_unlock(&e->video_mutex);
         } else {
-            have = webm_frame((WebmPlayer *)e->webm_player, seconds, &rgba, &width, &height, &serial);
-            if (have && rgba && serial != e->webm_tex_serial) {
-                frame = SDL_CreateRGBSurfaceWithFormat(0, width, height, 32,
-                                                       SDL_PIXELFORMAT_ARGB8888);
-                if (frame && frame->pixels) {
-                    memcpy(frame->pixels, rgba, (size_t)width * (size_t)height * 4u);
-                }
+            if (webm_frame((WebmPlayer *)e->webm_player, seconds, &rgba, &width, &height, &serial) && rgba) {
+                video_upload(e, rgba, width, height, serial);
             }
         }
 #else
-        have = webm_frame((WebmPlayer *)e->webm_player, seconds, &rgba, &width, &height, &serial);
-        if (have && rgba && serial != e->webm_tex_serial) {
-            frame = SDL_CreateRGBSurfaceWithFormat(0, width, height, 32, SDL_PIXELFORMAT_ARGB8888);
-            if (frame && frame->pixels) {
-                memcpy(frame->pixels, rgba, (size_t)width * (size_t)height * 4u);
-            }
+        if (webm_frame((WebmPlayer *)e->webm_player, seconds, &rgba, &width, &height, &serial) && rgba) {
+            video_upload(e, rgba, width, height, serial);
         }
 #endif
-        if (frame && frame->pixels) {
-            if (e->video_tex) {
-                SDL_DestroyTexture(e->video_tex);
-            }
-            e->video_tex = SDL_CreateTextureFromSurface(e->renderer, frame);
-            if (e->video_tex) {
-                SDL_SetTextureBlendMode(e->video_tex, SDL_BLENDMODE_BLEND);
-            }
-            e->webm_tex_serial = serial;
-        }
-        if (frame) {
-            SDL_FreeSurface(frame);
-        }
         if (!e->video_tex) {
             return;
         }

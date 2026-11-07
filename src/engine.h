@@ -277,6 +277,8 @@ typedef struct {
     int video_frames;
     SDL_Texture *video_tex;
     int video_tex_index;
+    int video_tex_w;
+    int video_tex_h;
     Uint32 video_start;
     Mix_Music *video_music;
 #ifdef __PROSPERO__
