@@ -541,6 +541,52 @@ static void free_text_block(TextBlock *block) {
     block->line_count = 0;
 }
 
+static void clear_text_cache(Engine *e) {
+    int i;
+    for (i = 0; i < TEXT_CACHE; i++) {
+        if (e->text_cache[i].used) {
+            free_text_block(&e->text_cache[i]);
+        }
+    }
+    e->text_count = 0;
+}
+
+static void set_font_size(Engine *e, int id, int size) {
+    if (id < 0 || id >= FONT_COUNT || size <= 0) {
+        return;
+    }
+    if (e->fonts[id] && e->font_sizes[id] == size) {
+        return;
+    }
+    if (e->fonts[id]) {
+        TTF_CloseFont(e->fonts[id]);
+        e->fonts[id] = NULL;
+    }
+    e->font_sizes[id] = size;
+    clear_text_cache(e);
+    ensure_font(e, id);
+}
+
+/* Largest size at which this choice fits on one line inside the button. */
+static int choice_fit_size(Engine *e, const char *text, int max_w, int max_h) {
+    static const int sizes[] = {60, 54, 48, 42, 36, 32, 28, 24, 20};
+    int i;
+    for (i = 0; i < (int)(sizeof(sizes) / sizeof(sizes[0])); i++) {
+        TTF_Font *font = open_font(e, e->font_paths[FONT_CHOICE], sizes[i]);
+        int w = 0;
+        int h = 0;
+        if (!font) {
+            continue;
+        }
+        TTF_SizeUTF8(font, text, &w, &h);
+        TTF_CloseFont(font);
+        if (w <= max_w && sizes[i] <= max_h) {
+            return sizes[i];
+        }
+    }
+    return sizes[(int)(sizeof(sizes) / sizeof(sizes[0])) - 1];
+}
+
 static TextBlock *text_block(Engine *e, int font_id, const char *text, Uint32 color, int wrap) {
     int i;
     int slot = -1;
@@ -2854,6 +2900,8 @@ static int button_action(Uint8 button) {
     case SDL_CONTROLLER_BUTTON_BACK:
         return ACT_PAUSE;
     case SDL_CONTROLLER_BUTTON_X:
+        return ACT_NONE;
+    case SDL_CONTROLLER_BUTTON_Y:
         return ACT_TRACKER;
     default:
         return ACT_NONE;
@@ -3130,12 +3178,28 @@ static void draw_choices(Engine *e) {
         int y = e->gui_choice_y + i * (e->gui_choice_h + e->gui_choice_spacing);
         Uint32 color = (i == e->choice_index) ? e->gui_choice_hover_color : e->gui_choice_idle_color;
         const char *background = (i == e->choice_index) ? e->gui_choice_hover : e->gui_choice_idle;
+        char display[MAX_TEXT];
+        const char *p = e->choice_text[i];
+        int k = 0;
         TextBlock *block;
         int height;
+        /* The script breaks some choices over two lines; the buttons are one
+         * line, so join them with a space and shrink to fit. */
+        while (*p && k < (int)sizeof(display) - 1) {
+            display[k++] = (*p == '\n' || *p == '\r') ? ' ' : *p;
+            p++;
+        }
+        display[k] = 0;
         if (background[0]) {
             draw_image(e, background, e->gui_choice_x, y, e->gui_choice_w, e->gui_choice_h, 255, 0);
         }
-        block = text_block(e, FONT_CHOICE, e->choice_text[i], color, e->gui_choice_w - 40);
+        {
+            /* The button art has wide transparent margins: keep the text
+             * inside the visible bar, not the nominal style width. */
+            int fit = choice_fit_size(e, display, e->gui_choice_w - 420, e->gui_choice_h);
+            set_font_size(e, FONT_CHOICE_FIT, fit);
+        }
+        block = text_block(e, FONT_CHOICE_FIT, display, color, 0);
         height = block_height(e, block, 0);
         draw_block(e, block, e->gui_choice_x + e->gui_choice_w / 2, y + (e->gui_choice_h - height) / 2, 1, 0);
     }
@@ -3264,7 +3328,7 @@ static void draw_main_menu(Engine *e) {
     if (e->seen_count > 0) {
         draw_image(e, "gui/ending_tracker/text_access.png", 1567, 864, 225, 120, 255, 0);
     }
-    draw_text(e, FONT_SMALL, "Unofficial homebrew runtime  -  Cross: select   D-pad: move", 0x9A9A9A, 0, 30,
+    draw_text(e, FONT_SMALL, "Unofficial homebrew runtime  -  Cross: select   D-pad: move   Triangle: endings", 0x9A9A9A, 0, 30,
               SCREEN_H - 40, 0, 0);
 }
 
@@ -3607,10 +3671,10 @@ static void load_gui(Engine *e) {
     e->gui_logo_h = 474;
 
     e->gui_name_x = 360;
-    e->gui_name_y = 806;
+    e->gui_name_y = 850;
     e->gui_name_color = 0x279BE8;
     e->gui_dialogue_x = 320;
-    e->gui_dialogue_y = 880;
+    e->gui_dialogue_y = 915;
     e->gui_dialogue_w = 1180;
     e->gui_dialogue_spacing = -5;
     e->gui_dialogue_color = 0x000000;
@@ -3705,6 +3769,8 @@ static void load_gui(Engine *e) {
     /* Ending tracker text, sized for the LCD inside the phone art. */
     copy_str(e->font_paths[FONT_TRACKER], MAX_PATH, "HELVETICA_LT_NARROW.TTF");
     e->font_sizes[FONT_TRACKER] = 24;
+    copy_str(e->font_paths[FONT_CHOICE_FIT], MAX_PATH, "HELVETICA_LT_NARROW.TTF");
+    e->font_sizes[FONT_CHOICE_FIT] = 60;
 }
 
 static void load_fonts(Engine *e) {
@@ -3866,11 +3932,15 @@ int engine_init(Engine *e, const char *script_path, const char *game_dir) {
         const char *start_label = getenv("CLASS09_START_LABEL");
         if (autostart && autostart[0] == '1') {
             int index;
+            const char *start_pc = getenv("CLASS09_START_PC");
             enter_main_menu(e);
             start_game(e);
             index = (start_label && start_label[0]) ? label_index(e, start_label) : -1;
             if (index >= 0) {
                 e->pc = index;
+            }
+            if (start_pc && start_pc[0]) {
+                e->pc = atoi(start_pc);
             }
         } else {
             const char *tracker = getenv("CLASS09_TRACKER");

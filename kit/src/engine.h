@@ -44,6 +44,7 @@ enum {
     FONT_SLOT,
     FONT_CSBOX,
     FONT_TRACKER,
+    FONT_CHOICE_FIT,
     FONT_COUNT
 };
 

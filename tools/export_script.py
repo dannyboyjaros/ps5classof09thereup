@@ -316,9 +316,15 @@ def apply_props(state, props):
         if key == "xalign":
             state["xpos"] = num
             state["xanchor"] = num
+        elif key == "xcenter":
+            state["xpos"] = num
+            state["xanchor"] = 0.5
         elif key == "yalign":
             state["ypos"] = num
             state["yanchor"] = num
+        elif key == "ycenter":
+            state["ypos"] = num
+            state["yanchor"] = 0.5
         elif key == "xpos":
             state["xpos"] = num
         elif key == "xanchor":
@@ -1232,16 +1238,16 @@ def build_gui(index):
         "logo": {"file": rl("gui/ClassOf09logo.png"), "x": 996, "y": 87, "w": 696, "h": 474},
         "name": {
             "x": 360,
-            # The textbox image is 1920x229 and sits at the bottom of a
-            # 278px window; 806 keeps the name just above the visible box.
-            "y": 806,
+            # The paper textbox starts 229px above the bottom edge (y=851);
+            # 850 puts the name on the paper, dialogue follows below it.
+            "y": 850,
             "font": rl("HELVETICA_EXTRA_COMPRESSED.TTF"),
             "size": 60,
             "color": "#279be8",
         },
         "dialogue": {
             "x": 320,
-            "y": 880,
+            "y": 915,
             "w": 1180,
             "font": rl("handwriting2.ttf"),
             "size": 50,
