@@ -407,53 +407,61 @@ def eval_atl_timeline(block, transforms, clock=0.0, state=None):
             clock = end
             continue
 
-        for expr in getattr(st, "expressions", None) or []:
-            text = as_text(expr[0] if isinstance(expr, (list, tuple)) else expr)
-            if not text:
-                continue
-            if "im.Flip" in text:
-                if not state["flip"]:
-                    tracks.append((clock, clock, "flip", 0, 1, "linear"))
-                state["flip"] = 1
-                continue
-            if text in transforms:
-                before = dict(state)
-                apply_props(state, transforms[text])
-                for key in state:
-                    if state[key] != before[key]:
-                        tracks.append((clock, clock, key, before[key], state[key], "linear"))
-                continue
-            if text in PREDEFINED:
-                before = dict(state)
-                apply_props(state, PREDEFINED[text])
-                for key in state:
-                    if state[key] != before[key]:
-                        tracks.append((clock, clock, key, before[key], state[key], "linear"))
-                continue
-            pause = to_float(text)
-            if pause is not None and pause > 0.0:
-                clock += pause
-
-        props = getattr(st, "properties", None)
         duration = to_float(getattr(st, "duration", None))
         if duration is None or duration < 0.0:
             duration = 0.0
         warper = as_text(getattr(st, "warper", None)) or "linear"
 
+        target = dict(state)
+        changed = False
+        pause_extra = 0.0
+
+        props = getattr(st, "properties", None)
         if props:
-            target = dict(state)
             apply_props(target, props)
-            for key in state:
-                if target[key] == state[key]:
-                    continue
-                if key == "flip" or duration <= 0.0:
-                    tracks.append((clock + duration, clock + duration, key, state[key], target[key], warper))
-                else:
-                    tracks.append((clock, clock + duration, key, state[key], target[key], warper))
-            clock += duration
-            state = target
-        elif duration > 0.0:
-            clock += duration
+            changed = True
+
+        for expr in getattr(st, "expressions", None) or []:
+            text = as_text(expr[0] if isinstance(expr, (list, tuple)) else expr)
+            if not text:
+                continue
+            if "im.Flip" in text:
+                if target.get("flip") != 1:
+                    target["flip"] = 1
+                    changed = True
+                continue
+            if text in transforms:
+                apply_props(target, transforms[text])
+                changed = True
+                continue
+            if text in PREDEFINED:
+                apply_props(target, PREDEFINED[text])
+                changed = True
+                continue
+            pause = to_float(text)
+            if pause is not None and pause > 0.0:
+                pause_extra += pause
+
+        if not changed:
+            if duration > 0.0:
+                clock += duration
+            elif pause_extra > 0.0:
+                clock += pause_extra
+            continue
+
+        # A timed transform/property line interpolates from the current state;
+        # a zero-duration line (e.g. `off_left` or `xzoom -1`) applies at once.
+        for key in state:
+            if target[key] == state[key]:
+                continue
+            if key == "flip" or duration <= 0.0:
+                tracks.append((clock + duration, clock + duration, key, state[key], target[key], warper))
+            else:
+                tracks.append((clock, clock + duration, key, state[key], target[key], warper))
+        state = target
+        clock += duration
+        if duration <= 0.0 and pause_extra > 0.0:
+            clock += pause_extra
 
     return clock, state, tracks
 
@@ -482,11 +490,7 @@ def build_animation(w0, h0, base, tracks):
         x, y, w, h = state_geometry(state, w0, h0)
         alpha = int(round(state["alpha"] * 255.0))
         flip = 1 if state["flip"] else 0
-        frame = [int(round(when * 1000.0)), x, y, w, h, alpha, flip]
-        if not frames or frame[1:] != frames[-1][1:]:
-            frames.append(frame)
-    while len(frames) > 2 and frames[-1][1:] == frames[-2][1:]:
-        frames.pop()
+        frames.append([int(round(when * 1000.0)), x, y, w, h, alpha, flip])
     if len(frames) < 2:
         return None
     if all(frame[1:] == frames[0][1:] for frame in frames):
@@ -517,6 +521,10 @@ class Assembler(object):
         self.unresolved_images = collections.Counter()
         self.unresolved_audio = collections.Counter()
         self.size_cache = {}
+        # Current transform state per (layer, tag).  Ren'Py keeps a tag's
+        # transform when a later `show` has no `at`/ATL block; the exporter
+        # needs that state to avoid snapping the character back to center.
+        self.tag_state = {}
 
         self.voice = ""
         self.wait_start = -1.0
@@ -617,12 +625,14 @@ class Assembler(object):
             return SCREEN_W, SCREEN_H
         return self.image_size(rel)
 
-    def place(self, kind, rel, atl, layer="master"):
+    def place(self, kind, rel, atl, layer="master", base=None):
         w0, h0 = self.base_size(kind, rel)
-        _end, state, tracks = eval_atl_timeline(atl, self.transforms)
-        frames = build_animation(w0, h0, new_state(), tracks)
+        start = dict(base) if base is not None else None
+        _end, state, tracks = eval_atl_timeline(atl, self.transforms, state=start)
+        sample_base = dict(base) if base is not None else new_state()
+        frames = build_animation(w0, h0, sample_base, tracks)
         x, y, w, h = state_geometry(state, w0, h0)
-        return x, y, w, h, round(state["alpha"], 3), int(state["flip"]), frames
+        return x, y, w, h, round(state["alpha"], 3), int(state["flip"]), frames, state
 
     def resolve_item(self, parts):
         """Return (kind, file, arg, forced_flip, resolved)."""
@@ -789,16 +799,19 @@ class Assembler(object):
         spec = getattr(node, "imspec", None)
         if not spec or not spec[0]:
             self.emit(["scene", "", "none", "", 0, 0, 0, 0, 0, 0, None])
+            self.tag_state = dict((k, v) for k, v in self.tag_state.items() if k[0] != "master")
             return
         parts = tuple(as_text(part) for part in spec[0])
         atl = getattr(node, "atl", None)
         kind, rel, arg, forced_flip, _ok = self.resolve_item(parts)
         if forced_flip:
             atl = None
-        x, y, w, h, alpha, flip, frames = self.place(kind, rel, atl)
+        x, y, w, h, alpha, flip, frames, _state = self.place(kind, rel, atl)
         if forced_flip:
             flip = 1
         self.emit(["scene", rel, kind, arg, x, y, w, h, alpha, flip, frames])
+        # A scene replaces the master layer.
+        self.tag_state = dict((k, v) for k, v in self.tag_state.items() if k[0] != "master")
 
     def emit_show(self, node):
         spec = getattr(node, "imspec", None)
@@ -808,12 +821,22 @@ class Assembler(object):
         parts = tuple(as_text(part) for part in spec[0])
         tag = as_text(spec[2]) if spec[2] else (parts[0] if parts else "")
         layer = as_text(spec[4]) if spec[4] else "master"
+        behind_spec = spec[6] if len(spec) > 6 else None
+        behind_tags = []
+        if behind_spec:
+            if isinstance(behind_spec, (list, tuple)):
+                behind_tags = [as_text(x) for x in behind_spec]
+            else:
+                behind_tags = [as_text(behind_spec)]
+        behind = ",".join(t for t in behind_tags if t)
 
         kind, rel, arg, forced_flip, ok = self.resolve_item(parts)
         atl = getattr(node, "atl", None)
         if forced_flip:
             atl = None
-        x, y, w, h, alpha, flip, frames = self.place(kind, rel, atl, layer)
+        key = (layer, tag)
+        base = self.tag_state.get(key) if atl is None else None
+        x, y, w, h, alpha, flip, frames, state = self.place(kind, rel, atl, layer, base)
         if forced_flip:
             flip = 1
 
@@ -829,23 +852,27 @@ class Assembler(object):
             # `show lynn` with no attributes re-shows the tag's current image
             # in Ren'Py; keep it instead of blanking the sprite.
             if len(parts) == 1:
-                self.emit(["show", "", tag, layer, "keep", "", x, y, w, h, alpha, flip, frames])
+                self.emit(["show", "", tag, layer, "keep", "", x, y, w, h, alpha, flip, frames, behind])
             else:
                 # Keep the tag so a later hide still works, but draw nothing.
-                self.emit(["show", "", tag, layer, "none", "", x, y, w, h, alpha, flip, frames])
+                self.emit(["show", "", tag, layer, "none", "", x, y, w, h, alpha, flip, frames, behind])
+            self.tag_state[key] = state
             return
 
-        self.emit(["show", rel, tag, layer, kind, arg, x, y, w, h, alpha, flip, frames])
+        self.emit(["show", rel, tag, layer, kind, arg, x, y, w, h, alpha, flip, frames, behind])
+        self.tag_state[key] = state
 
     def emit_hide(self, node):
         spec = getattr(node, "imspec", None)
         layer = as_text(spec[4]) if spec and spec[4] else "master"
         if not spec or not spec[0]:
             self.emit(["hide", "", layer])
+            self.tag_state = dict((k, v) for k, v in self.tag_state.items() if k[0] != layer)
             return
         parts = tuple(as_text(part) for part in spec[0])
         tag = as_text(spec[2]) if spec[2] else (parts[0] if parts else "")
         self.emit(["hide", tag or "", layer])
+        self.tag_state.pop((layer, tag or ""), None)
 
     # -- menus / if ------------------------------------------------------
 
